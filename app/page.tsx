@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 const certs = [
-  { name: "SC-200",    full: "Security Operations Analyst Associate", dot: "#2997ff" },
-  { name: "AZ-700",    full: "Azure Network Engineer Associate",       dot: "#30d158" },
-  { name: "AZ-900",    full: "Azure Fundamentals",                     dot: "#30d158" },
-  { name: "Security+", full: "CompTIA SY0-701",                        dot: "#ff453a" },
+  { name: "SC-200",    full: "Security Operations Analyst Associate", dot: "#2997ff", url: "https://learn.microsoft.com/api/credentials/share/en-us/MatomeSamsonLetsoalo-9758/A4132F9B71111DB?sharingId=7FDEA2F6BD6B2B9" },
+  { name: "AZ-700",    full: "Azure Network Engineer Associate",       dot: "#30d158", url: "https://learn.microsoft.com/api/credentials/share/en-us/MatomeSamsonLetsoalo-9758/11166C4277C5E7F7?sharingId=7FDEA2F6BD6B2B9" },
+  { name: "AZ-900",    full: "Azure Fundamentals",                     dot: "#30d158", url: "https://learn.microsoft.com/api/credentials/share/en-us/MatomeSamsonLetsoalo-9758/BB0F095EA1331ECD?sharingId=7FDEA2F6BD6B2B9" },
+  { name: "Security+", full: "CompTIA SY0-701",                        dot: "#ff453a", url: "https://www.credly.com/badges/8dca6de5-29c2-4081-b472-e0e4bc2afbf1/linked_in_profile" },
 ];
 
 const skills = [
@@ -137,17 +137,25 @@ export default function Home() {
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {certs.map((c) => (
-              <div
+              <a
                 key={c.name}
-                className="rounded-2xl p-5 flex flex-col gap-2 transition-all"
-                style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}
+                href={c.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-2xl p-5 flex flex-col gap-2 transition-all group"
+                style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)", textDecoration: "none" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-h)"; (e.currentTarget as HTMLElement).style.borderColor = "var(--border-h)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow)"; (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; }}
               >
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.dot }} />
-                  <span className="font-bold text-sm" style={{ color: "var(--text)" }}>{c.name}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.dot }} />
+                    <span className="font-bold text-sm" style={{ color: "var(--text)" }}>{c.name}</span>
+                  </div>
+                  <span className="text-xs opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--accent)" }}>Verify ↗</span>
                 </div>
                 <p className="text-xs leading-snug" style={{ color: "var(--text-2)" }}>{c.full}</p>
-              </div>
+              </a>
             ))}
           </div>
         </div>
