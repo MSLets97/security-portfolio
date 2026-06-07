@@ -52,3 +52,18 @@ html.dark        { color-scheme: dark;  }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-h); border-radius: 3px; }
+
+.cert-card {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.cert-card:hover {
+  box-shadow: var(--shadow-h) !important;
+  border-color: var(--border-h) !important;
+}
+.cert-card .verify-label {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.cert-card:hover .verify-label {
+  opacity: 1;
+}

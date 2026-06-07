@@ -142,17 +142,15 @@ export default function Home() {
                 href={c.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded-2xl p-5 flex flex-col gap-2 transition-all group"
+                className="cert-card rounded-2xl p-5 flex flex-col gap-2"
                 style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)", textDecoration: "none" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-h)"; (e.currentTarget as HTMLElement).style.borderColor = "var(--border-h)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow)"; (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; }}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: c.dot }} />
                     <span className="font-bold text-sm" style={{ color: "var(--text)" }}>{c.name}</span>
                   </div>
-                  <span className="text-xs opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--accent)" }}>Verify ↗</span>
+                  <span className="verify-label text-xs" style={{ color: "var(--accent)" }}>Verify ↗</span>
                 </div>
                 <p className="text-xs leading-snug" style={{ color: "var(--text-2)" }}>{c.full}</p>
               </a>
