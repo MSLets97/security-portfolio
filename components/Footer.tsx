@@ -23,7 +23,7 @@ export default function Footer() {
               <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--text-3)" }}>Connect</p>
               <div className="flex flex-col gap-2">
                 <a href="https://linkedin.com/in/mslets97" target="_blank" rel="noopener noreferrer" className="text-sm" style={{ color: "var(--text-2)" }}>LinkedIn ↗</a>
-                <a href="https://github.com/YOUR_GITHUB"   target="_blank" rel="noopener noreferrer" className="text-sm" style={{ color: "var(--text-2)" }}>GitHub ↗</a>
+                <a href="https://github.com/MSLets97"   target="_blank" rel="noopener noreferrer" className="text-sm" style={{ color: "var(--text-2)" }}>GitHub ↗</a>
                 <a href="mailto:mslets6040@gmail.com" className="text-sm" style={{ color: "var(--text-2)" }}>Email</a>
               </div>
             </div>
