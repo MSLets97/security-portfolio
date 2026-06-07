@@ -45,9 +45,10 @@ export default function Navbar() {
   }, []);
 
   const links = [
-    { href: "/#about",  label: "About"  },
-    { href: "/#skills", label: "Skills" },
-    { href: "/labs",    label: "Labs"   },
+    { href: "/#about",          label: "About"          },
+    { href: "/#certifications", label: "Certifications" },
+    { href: "/#skills",         label: "Skills"         },
+    { href: "/labs",            label: "Labs"           },
   ];
 
   return (

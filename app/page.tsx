@@ -130,7 +130,7 @@ export default function Home() {
       </section>
 
       {/* ── Certifications ── */}
-      <section className="py-20 px-6" style={{ backgroundColor: "var(--bg-alt)" }}>
+      <section id="certifications" className="py-20 px-6" style={{ backgroundColor: "var(--bg-alt)" }}>
         <div className="max-w-5xl mx-auto">
           <p className="text-xs font-semibold tracking-widest uppercase mb-8 text-center" style={{ color: "var(--text-3)" }}>
             Certifications
