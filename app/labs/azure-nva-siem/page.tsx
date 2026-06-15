@@ -2,9 +2,11 @@ import Link from "next/link";
 
 const techs = [
   "Microsoft Azure", "Terraform (azurerm ~3.0)", "OPNsense (FreeBSD 14.1)",
-  "WireGuard VPN", "syslog-ng", "rsyslog", "Azure Monitor Agent (AMA)",
-  "Data Collection Rules (DCR)", "Microsoft Sentinel", "KQL",
-  "Ubuntu 22.04", "Azure NSGs", "User-Defined Routes", "cloud-init",
+  "Zenarmor (NGF plugin)", "WireGuard VPN", "syslog-ng", "rsyslog",
+  "Azure Monitor Agent (AMA)", "Data Collection Rules (DCR)",
+  "Microsoft Sentinel", "KQL", "Ubuntu 22.04", "Ubuntu 24.04 LTS",
+  "Windows Server 2025", "Azure NSGs", "User-Defined Routes (UDR)",
+  "Azure VNet Flow Logs", "Traffic Analytics", "Azure Network Watcher", "cloud-init",
 ];
 
 const challenges = [
@@ -56,6 +58,46 @@ const challenges = [
     fix: "Ran ssh-keygen -R 10.40.1.5 on the OPNsense shell to remove the stale key, then reconnected and accepted the new fingerprint.",
     lesson: "When Terraform rebuilds a VM, clear any SSH known_hosts entries for that IP on all other hosts that connect to it. This triggers whenever custom_data, OS disk, or the VM image changes.",
   },
+  {
+    number: "07",
+    title: "Sentinel Auto-Modifies DCR — Terraform Wants to Destroy It",
+    problem: "After Sentinel was enabled, terraform plan showed the Data Collection Rule would be destroyed and recreated on every apply. The lab syslog pipeline would be broken each time.",
+    rootCause: "Microsoft Sentinel automatically modifies DCRs after creation — adding kind=\"Linux\" and extra syslog facilities (local1–local7). Terraform detected this drift as configuration change and planned a destroy/recreate cycle.",
+    fix: "Added lifecycle { ignore_changes = all } to the azurerm_monitor_data_collection_rule resource. Terraform now ignores all post-creation drift on the DCR without destroying it.",
+    lesson: "Sentinel modifies DCRs after creation as part of workspace onboarding. Always add lifecycle ignore_changes = all to DCR resources when Sentinel is enabled on the workspace — otherwise every apply will try to replace the pipeline.",
+  },
+  {
+    number: "08",
+    title: "Windows VM Name Exceeds 15-Character Limit",
+    problem: "terraform apply failed with: computer_name can be at most 15 characters, got 20. The deployment blocked completely.",
+    rootCause: "The VM resource name was VM-Client-User1-65s4 (20 characters). Azure uses the resource name as the Windows computer name by default, but Windows has a hard 15-character NetBIOS hostname limit.",
+    fix: "Added an explicit computer_name = \"ClientUser1\" attribute to the azurerm_windows_virtual_machine resource. The Azure resource name can remain long; the Windows hostname is set independently.",
+    lesson: "Always set computer_name explicitly on Windows VMs in Terraform when the resource name exceeds 15 characters. The azurerm provider does not warn about this until apply time.",
+  },
+  {
+    number: "09",
+    title: "OPNsense Wrong LAN Gateway — Return Path Routing Failure",
+    problem: "Client VM (10.40.3.4) had no internet access. OPNsense Live View showed NAT and Pass on all outbound packets — but every ping timed out with zero replies, even to OPNsense's own LAN IP.",
+    rootCause: "OPNsense's LAN gateway was configured as 10.0.1.1 — the setup script default. The actual Azure subnet gateway for snet-mgmt (10.40.1.0/24) is 10.40.1.1. Additionally, OPNsense had no static routes to the client (10.40.3.0/24) or workload (10.40.2.0/24) subnets, so return packets were silently dropped with no log entry.",
+    fix: "Corrected LAN_GW to 10.40.1.1 in OPNsense System → Gateways. Added static routes for 10.40.3.0/24 and 10.40.2.0/24 via the LAN gateway. Internet connectivity from client VM was confirmed immediately after.",
+    lesson: "Azure always reserves the .1 address as the subnet gateway. After any OPNsense setup script, verify the LAN gateway matches the actual Azure subnet .1 address. NAT+Pass with zero replies is always a return-path routing problem — not a firewall rule problem.",
+  },
+  {
+    number: "10",
+    title: "OPNsense LAN Block Rules Below Allow Rule — Doing Nothing",
+    problem: "Added block rules for lateral movement (SMB 445, RDP 3389, NetBIOS 139, RPC 135) from client to workload subnet. Test traffic still passed through — no block events appeared in OPNsense Live View or Sentinel.",
+    rootCause: "The block rules were positioned below the Default allow LAN to any rule in the LAN rule list. OPNsense evaluates rules top-to-bottom with first-match-wins. Traffic from 10.40.3.4 matched the allow rule first and was passed before reaching any block rule.",
+    fix: "Dragged the four lateral movement block rules above the Default allow LAN to any rule using the OPNsense rule drag handles. Applied changes. Subsequent test traffic (port 445, 3389, 135, 139) now generates block log entries visible in Sentinel.",
+    lesson: "In OPNsense and pfSense, rule order is everything. Block rules must always sit above catch-all allow rules. The Allow rule at position 3 and Block rule at position 6 means the allow always wins. Check rule order before debugging any traffic that should be blocked.",
+  },
+  {
+    number: "11",
+    title: "NSG Flow Logs Retired — azurerm 4.x Required for Replacement",
+    problem: "Terraform failed to create NSG flow logs with: NsgFlowLogCreationBlocked — creation of new NSG flow logs is blocked starting June 30, 2025. The VNet flow log replacement requires azurerm 4.x.",
+    rootCause: "Azure retired NSG flow logs on June 30, 2025. VNet flow logs are the replacement but the target_resource_id attribute needed for VNet flow logs was only added in azurerm 4.x. Upgrading to 4.x would break the existing azurerm_virtual_machine resource used for OPNsense, which was removed in azurerm 4.0.",
+    fix: "Managed the storage account via Terraform (azurerm_storage_account). Created the VNet flow log via Azure Portal pointing at the Terraform-managed storage account with Traffic Analytics forwarding to the Sentinel workspace. Documented the intentional split in code comments.",
+    lesson: "NSG flow logs are fully retired as of June 30, 2025. VNet flow logs are the replacement and require azurerm 4.x. When a provider upgrade would break existing resources, manage the new resource via portal or azapi provider and document why it is not in Terraform state.",
+  },
 ];
 
 const outcomes = [
@@ -65,6 +107,11 @@ const outcomes = [
   "WireGuard VPN provides secure management — no SSH port exposed on WAN interface",
   "Terraform provisions the entire lab from scratch with a single apply",
   "pfSense Content Hub parser installed in Sentinel for structured threat analysis",
+  "Two-layer defense confirmed: NSG drops unknown ports silently; OPNsense logs and blocks what NSG allows through",
+  "Real internet attack traffic observed after opening NSG — LDAP (389), Elasticsearch (9200), VNC (5800), Grafana (3000), Telnet (23) scanners blocked by OPNsense WAN rules within minutes",
+  "Lateral movement blocked: SMB 445, RDP 3389, RPC 135, NetBIOS 139 blocked east-west between subnets via LAN rules",
+  "Zenarmor next-gen plugin active on OPNsense — malicious domain blocked at DNS layer with cloud threat intelligence",
+  "VNet Flow Logs ingested to AzureNetworkAnalytics_CL in Sentinel — full NSG allow/deny visibility for reporting",
 ];
 
 export default function LabPage() {
@@ -125,39 +172,43 @@ export default function LabPage() {
             style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)", fontFamily: "var(--font-geist-mono)" }}
           >
             <pre className="text-xs leading-relaxed whitespace-pre" style={{ color: "var(--text-2)" }}>{`
-  Internet (attacker simulation)
+  Internet (real scanners: RDP brute force, LDAP, Elasticsearch, VNC probes)
        │
        ▼
-  ┌────────────────────────────────────────┐
-  │          Azure NSG (WAN)               │
-  │  Allow: UDP 51820 (WireGuard only)     │
-  │  Deny:  everything else                │
-  └────────────────┬───────────────────────┘
-                   │
-                   ▼
-  ┌────────────────────────────────────────┐
-  │        OPNsense NVA (FreeBSD)          │
-  │  WAN NIC: public IP                    │
-  │  LAN NIC: 10.40.1.4 (snet-mgmt)       │
-  │  filterlog → syslog-ng                 │
-  │  facility: local0  →  UDP port 514     │
-  └────────────────┬───────────────────────┘
-                   │ syslog UDP 514
-                   ▼
-  ┌────────────────────────────────────────┐
-  │    Log Forwarder VM (Ubuntu 22.04)     │
-  │  IP: 10.40.1.5 (snet-mgmt)            │
-  │  rsyslog listening on UDP/TCP 514      │
-  │  Azure Monitor Agent + otelcollector   │
-  └────────────────┬───────────────────────┘
-                   │ HTTPS (AMA)
-                   ▼
-  ┌────────────────────────────────────────┐
-  │   Log Analytics Workspace + Sentinel   │
-  │  DCR: facility local0                  │
-  │  Syslog table → KQL queries            │
-  │  pfSense parser → structured fields    │
-  └────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────┐
+  │             Azure NSG (WAN)                      │
+  │  Allow: 22, 443, 3389, UDP 51820 (WireGuard)    │
+  │  Deny:  all other ports (silently)               │
+  │  VNet Flow Logs → stflowlogs → Traffic Analytics │
+  └─────────────────────┬────────────────────────────┘
+                        │ allowed ports reach NVA
+                        ▼
+  ┌──────────────────────────────────────────────────┐
+  │      OPNsense NVA (FreeBSD) + Zenarmor           │
+  │  WAN hn0: 10.40.0.4  (snet-wan  10.40.0.0/24)   │
+  │  LAN hn1: 10.40.1.4  (snet-mgmt 10.40.1.0/24)   │
+  │  WAN rules: block 22/3389 + log all blocked      │
+  │  LAN rules: block SMB/RDP/RPC/NetBIOS east-west  │
+  │  Zenarmor: cloud threat intel, domain blocking   │
+  │  Static routes → 10.40.2.0/24, 10.40.3.0/24     │
+  │  filterlog (local0) → syslog-ng → UDP 514        │
+  └───────┬────────────────────────┬─────────────────┘
+          │ UDR forces all         │ syslog UDP 514
+          │ subnet traffic         ▼
+          │ through OPNsense  ┌─────────────────────────────┐
+          │                   │  Log Forwarder (Ubuntu 22)  │
+          ├──────────────┐    │  10.40.1.5  (snet-mgmt)     │
+          ▼              ▼    │  rsyslog + AMA + otelcol    │
+  ┌─────────────┐ ┌──────────┤  └──────────────┬────────────┘
+  │ snet-client │ │snet-work │                  │ HTTPS (AMA)
+  │10.40.3.0/24 │ │10.40.2.0 │                  ▼
+  │VM-Client    │ │VM-Work   │  ┌─────────────────────────────────┐
+  │Windows 2025 │ │Ubuntu 24 │  │  Log Analytics + Sentinel       │
+  │10.40.3.4    │ │10.40.2.4 │  │  Syslog: filterlog blocks       │
+  └─────────────┘ └──────────┘  │  AzureNetworkAnalytics_CL:      │
+                                 │  NSG + VNet flow data           │
+                                 │  KQL threat hunting + alerts    │
+                                 └─────────────────────────────────┘
 `}</pre>
           </div>
         </section>
@@ -182,7 +233,7 @@ export default function LabPage() {
         <section className="mb-20">
           <h2 className="text-2xl font-bold tracking-tight mb-2" style={{ color: "var(--text)" }}>Challenges &amp; Solutions</h2>
           <p className="text-sm mb-10" style={{ color: "var(--text-3)" }}>
-            Six real engineering problems encountered and solved during the build.
+            Eleven real engineering problems encountered and solved during the build.
           </p>
           <div className="flex flex-col gap-5">
             {challenges.map((c) => (
