@@ -16,38 +16,45 @@ const skills = [
   { category: "Automation & Scripting", items: ["PowerShell", "KQL", "Terraform", "Logic Apps", "Webhooks", "Azure Functions"] },
 ];
 
-const labs = [
+const phases = [
   {
-    slug: "azure-nva-siem",
-    title: "Azure NVA + Microsoft Sentinel",
-    description: "OPNsense as a Network Virtual Appliance in a hub-and-spoke Azure topology, with a full syslog pipeline into Microsoft Sentinel — provisioned entirely with Terraform.",
-    tags: ["Azure", "OPNsense", "Sentinel", "Terraform", "WireGuard"],
+    slug: "phase-1-perimeter",
+    number: "01",
+    title: "Perimeter Security & Network Architecture",
+    description: "OPNsense NVA on Azure, four-subnet segmentation, WAN/LAN firewall rules, WireGuard VPN for zero-trust management — full Terraform IaC.",
+    tags: ["OPNsense", "Azure", "Terraform", "WireGuard", "UDR"],
     status: "Completed",
+    labCount: 2,
   },
   {
-    slug: "suricata-ids",
-    title: "Suricata IDS/IPS",
-    description: "Suricata in active IPS prevention mode on OPNsense with Emerging Threats rule sets and custom signatures to detect Nmap SYN reconnaissance in real time.",
-    tags: ["Suricata", "IDS/IPS", "OPNsense", "Snort Rules"],
+    slug: "phase-2-visibility",
+    number: "02",
+    title: "Security Visibility & SIEM",
+    description: "syslog-ng → AMA → Sentinel pipeline, Azure VNet Flow Logs, KQL threat hunting queries, pfSense parser for structured filterlog analysis.",
+    tags: ["Sentinel", "KQL", "syslog-ng", "AMA", "VNet Flow Logs"],
+    status: "Completed",
+    labCount: 3,
+  },
+  {
+    slug: "phase-3-detection",
+    number: "03",
+    title: "Threat Detection & IDS/IPS",
+    description: "Zenarmor NGF plugin for DNS-layer blocking, Suricata in active IPS mode with Emerging Threats rules and custom signatures.",
+    tags: ["Zenarmor", "Suricata", "IDS/IPS", "Threat Intel"],
     status: "In Progress",
-  },
-  {
-    slug: "azure-soc",
-    title: "Full Azure SOC",
-    description: "Complete SOC with automated incident response, Sentinel analytics rules mapped to MITRE ATT&CK, SOAR playbooks, and threat intelligence integration.",
-    tags: ["Sentinel", "SOAR", "Logic Apps", "Analytics Rules"],
-    status: "Planned",
+    labCount: 1,
   },
 ];
 
 const checklist = [
-  { done: true,  text: "OPNsense NVA — hub-and-spoke topology" },
-  { done: true,  text: "WireGuard VPN — zero WAN SSH exposure" },
-  { done: true,  text: "syslog-ng → AMA → Sentinel pipeline" },
-  { done: true,  text: "KQL threat hunting queries" },
-  { done: false, text: "Suricata IDS/IPS with custom signatures" },
-  { done: false, text: "Sentinel Analytics Rules & SOAR" },
-  { done: false, text: "AZ-500 — Azure Security Engineer" },
+  { done: true,  text: "Phase 1 — Perimeter Security & Network Architecture" },
+  { done: true,  text: "Phase 2 — Security Visibility & SIEM" },
+  { done: false, text: "Phase 3 — Threat Detection & IDS/IPS (in progress)" },
+  { done: false, text: "Phase 4 — Attack Simulation & Threat Hunting" },
+  { done: false, text: "Phase 5 — Vulnerability Management" },
+  { done: false, text: "Phase 6 — Identity & Access Control" },
+  { done: false, text: "Phase 7 — Incident Response" },
+  { done: false, text: "Phase 8 — Compliance & Hardening" },
 ];
 
 export default function Home() {
@@ -118,7 +125,7 @@ export default function Home() {
               { v: "4+", l: "Years Experience" },
               { v: "2+", l: "Years in SOC"     },
               { v: "4",  l: "Certifications"   },
-              { v: "3",  l: "Labs Building"    },
+              { v: "8",  l: "Lab Phases"       },
             ].map((s) => (
               <div key={s.l} className="text-center">
                 <p className="text-4xl font-bold tracking-tight" style={{ color: "var(--text)" }}>{s.v}</p>
@@ -270,39 +277,36 @@ export default function Home() {
             Real labs. Real challenges. Real fixes. Every case study is documented from first principles.
           </p>
           <div className="grid md:grid-cols-3 gap-5">
-            {labs.map((lab) => (
+            {phases.map((phase) => (
               <div
-                key={lab.slug}
+                key={phase.slug}
                 className="rounded-3xl p-7 flex flex-col transition-all group"
                 style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}
               >
-                <div className="mb-5">
+                <div className="flex items-center justify-between mb-5">
                   <span
                     className="text-xs px-3 py-1 rounded-full font-medium"
                     style={{
-                      backgroundColor: lab.status === "Completed" ? "#30d15820" : lab.status === "In Progress" ? "#2997ff20" : "var(--bg-alt)",
-                      color: lab.status === "Completed" ? "#30d158" : lab.status === "In Progress" ? "var(--accent)" : "var(--text-3)",
+                      backgroundColor: phase.status === "Completed" ? "#30d15820" : phase.status === "In Progress" ? "#2997ff20" : "var(--bg-alt)",
+                      color: phase.status === "Completed" ? "#30d158" : phase.status === "In Progress" ? "var(--accent)" : "var(--text-3)",
                     }}
                   >
-                    {lab.status}
+                    {phase.status}
                   </span>
+                  <span className="text-xs font-mono" style={{ color: "var(--text-3)" }}>Phase {phase.number}</span>
                 </div>
-                <h3 className="font-semibold text-base mb-2 leading-snug" style={{ color: "var(--text)" }}>{lab.title}</h3>
-                <p className="text-sm leading-relaxed flex-1 mb-5" style={{ color: "var(--text-2)" }}>{lab.description}</p>
+                <h3 className="font-semibold text-base mb-2 leading-snug" style={{ color: "var(--text)" }}>{phase.title}</h3>
+                <p className="text-sm leading-relaxed flex-1 mb-5" style={{ color: "var(--text-2)" }}>{phase.description}</p>
                 <div className="flex flex-wrap gap-1.5 mb-5">
-                  {lab.tags.map((t) => (
+                  {phase.tags.map((t) => (
                     <span key={t} className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: "var(--bg-alt)", color: "var(--text-3)", border: "1px solid var(--border)" }}>
                       {t}
                     </span>
                   ))}
                 </div>
-                {lab.status === "Completed" ? (
-                  <Link href={`/labs/${lab.slug}`} className="text-sm font-medium transition-colors" style={{ color: "var(--accent)" }}>
-                    Read case study →
-                  </Link>
-                ) : (
-                  <span className="text-sm" style={{ color: "var(--text-3)" }}>Coming soon</span>
-                )}
+                <Link href={`/labs/${phase.slug}`} className="text-sm font-medium transition-colors" style={{ color: "var(--accent)" }}>
+                  {phase.labCount} lab{phase.labCount !== 1 ? "s" : ""} — view phase →
+                </Link>
               </div>
             ))}
           </div>
