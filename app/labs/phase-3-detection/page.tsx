@@ -1,4 +1,9 @@
 import Link from "next/link";
+import { KeyLearningsRollup, KeyLearning } from "@/components/KeyLearningsRollup";
+
+const keyLearnings: KeyLearning[] = [
+  { source: "Lab 3.2 — Suricata IDS/IPS", lesson: "OPNsense plugin UIs change between major versions — the Suricata config moved from a per-interface tab with a binary IPS checkbox to a single unified Settings page with a Capture mode dropdown. Never document a workflow purely from memory or an older guide; confirm against the live, running version first." },
+];
 
 const labs = [
   {
@@ -119,15 +124,11 @@ export default function Phase3Page() {
                           </span>
                         ))}
                       </div>
-                      {isCompleted ? (
-                        <Link href={`/labs/phase-3-detection/${lab.slug}`}
-                          className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium"
-                          style={{ backgroundColor: "var(--accent)", color: "#fff" }}>
-                          Read case study →
-                        </Link>
-                      ) : (
-                        <span className="text-sm" style={{ color: "var(--text-3)" }}>In progress — coming soon</span>
-                      )}
+                      <Link href={`/labs/phase-3-detection/${lab.slug}`}
+                        className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium"
+                        style={{ backgroundColor: isCompleted ? "var(--accent)" : "var(--bg-alt)", color: isCompleted ? "#fff" : "var(--text)", border: isCompleted ? "none" : "1px solid var(--border)" }}>
+                        {isCompleted ? "Read case study →" : "View progress so far →"}
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -135,6 +136,9 @@ export default function Phase3Page() {
             })}
           </div>
         </section>
+
+        {/* Key Learnings */}
+        <KeyLearningsRollup items={keyLearnings} />
 
         {/* Nav */}
         <div className="flex items-center justify-between pt-8" style={{ borderTop: "1px solid var(--border)" }}>

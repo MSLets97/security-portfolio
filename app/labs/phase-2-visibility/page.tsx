@@ -1,4 +1,38 @@
 import Link from "next/link";
+import { FlowDiagram, DiagramRow } from "@/components/ArchitectureDiagram";
+import { KeyLearningsRollup, KeyLearning } from "@/components/KeyLearningsRollup";
+
+const architecture: DiagramRow[] = [
+  {
+    boxes: [{
+      title: "OPNsense NVA (FreeBSD 14.1)", color: "security",
+      lines: ["filterlog → syslog facility local0", "syslog-ng filter f_local0, dest udp 10.40.1.5:514"],
+    }],
+    arrowAfter: { label: "UDP 514 (syslog stream)" },
+  },
+  {
+    boxes: [{
+      title: "Log Forwarder VM", color: "tooling", subtitle: "Ubuntu 22.04 — 10.40.1.5",
+      lines: ["rsyslog: listen UDP/TCP 514", "Azure Monitor Agent + azureotelcollector"],
+    }],
+    arrowAfter: { label: "HTTPS (DCR-targeted stream)" },
+  },
+  {
+    boxes: [
+      { title: "Syslog table", color: "tooling", lines: ["facility_name == \"local0\"", "pfSense parser → SrcIP, DstIP,", "DstPort, Action, Protocol"] },
+      { title: "AzureNetworkAnalytics_CL", color: "tooling", lines: ["VNet Flow Logs → Traffic Analytics", "FlowType, PublicIPs, Ports, Direction"] },
+    ],
+  },
+];
+
+const keyLearnings: KeyLearning[] = [
+  { source: "Lab 2.1 — Syslog Pipeline", lesson: "written;0 with a non-zero s_all processed count is the definitive syslog-ng signal a filter is rejecting messages, not the network. Verify with syslog-ng-ctl stats before assuming connectivity is the problem." },
+  { source: "Lab 2.1 — Syslog Pipeline", lesson: "AMA Heartbeat only proves the agent binary is running — it says nothing about the syslog pipeline. Always verify azureotelcollector is active and enabled separately." },
+  { source: "Lab 2.1 — Syslog Pipeline", lesson: "Sentinel auto-creates DCR associations Terraform doesn't manage. On ExistingAssociationsPreventDelete, check Data Collection Rules → Resources in the portal first." },
+  { source: "Lab 2.1 — Syslog Pipeline", lesson: "Sentinel modifies DCRs after creation (adding kind=\"Linux\" and extra facilities). Add lifecycle { ignore_changes = all } to DCR resources or every apply tries to replace the pipeline." },
+  { source: "Lab 2.2 — Sentinel & KQL", lesson: "A known, controlled-source attack lets you verify the detection chain on your own schedule. Real, unsolicited internet scanner traffic then proves what the perimeter is actually defending against in practice." },
+  { source: "Lab 2.3 — VNet Flow Logs", lesson: "NSG flow logs are fully retired as of June 30, 2025. When a provider upgrade (azurerm 4.x) would break existing resources, manage the new resource via portal and document why it's not in Terraform state." },
+];
 
 const labs = [
   {
@@ -99,42 +133,14 @@ export default function Phase2Page() {
           <h2 className="text-2xl font-bold tracking-tight mb-5" style={{ color: "var(--text)" }}>Phase Architecture</h2>
           <div
             className="rounded-3xl p-8 overflow-x-auto"
-            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)", fontFamily: "var(--font-geist-mono)" }}
+            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}
           >
-            <pre className="text-xs leading-relaxed whitespace-pre" style={{ color: "var(--text-2)" }}>{`
-  OPNsense NVA (FreeBSD 14.1)
-  filterlog daemon → syslog facility local0
-  syslog-ng: filter f_local0 { facility(local0); }
-             dest d_logfwd  { udp("10.40.1.5" port(514)); }
-       │
-       │ UDP 514 (syslog stream)
-       ▼
-  Log Forwarder VM (Ubuntu 22.04 — 10.40.1.5)
-  rsyslog: listen UDP/TCP 514
-  Azure Monitor Agent (AMA)
-  azureotelcollector: ships syslog → Log Analytics
-       │
-       │ HTTPS (DCR-targeted stream)
-       ▼
-  ┌─────────────────────────────────────────────┐
-  │  Log Analytics Workspace + Sentinel         │
-  │                                             │
-  │  Syslog table:                              │
-  │    facility_name == "local0"                │
-  │    SyslogMessage = raw filterlog CSV        │
-  │    pfSense parser → structured fields       │
-  │    SrcIP, DstIP, DstPort, Action, Protocol  │
-  │                                             │
-  │  AzureNetworkAnalytics_CL table:            │
-  │    VNet Flow Logs → Traffic Analytics       │
-  │    NSG allow/deny decisions                 │
-  │    FlowType, PublicIPs, Ports, Direction    │
-  └─────────────────────────────────────────────┘
-
-  Two visibility sources, one query surface:
-  OPNsense → Syslog (firewall decisions, logged blocks)
-  Azure NSG → AzureNetworkAnalytics_CL (all flows)
-`}</pre>
+            <FlowDiagram rows={architecture} />
+            <p className="text-xs mt-6 pt-5" style={{ color: "var(--text-3)", borderTop: "1px solid var(--border)" }}>
+              Two visibility sources, one query surface: OPNsense → Syslog covers firewall decisions and
+              logged blocks; Azure NSG → AzureNetworkAnalytics_CL covers all flows, including what NSG
+              drops before OPNsense ever sees it.
+            </p>
           </div>
         </section>
 
@@ -179,6 +185,9 @@ export default function Phase2Page() {
             ))}
           </div>
         </section>
+
+        {/* Key Learnings */}
+        <KeyLearningsRollup items={keyLearnings} />
 
         {/* Nav */}
         <div className="flex items-center justify-between pt-8" style={{ borderTop: "1px solid var(--border)" }}>

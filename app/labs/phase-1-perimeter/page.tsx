@@ -1,4 +1,46 @@
 import Link from "next/link";
+import { FlowDiagram, DiagramRow } from "@/components/ArchitectureDiagram";
+import { KeyLearningsRollup, KeyLearning } from "@/components/KeyLearningsRollup";
+
+const keyLearnings: KeyLearning[] = [
+  { source: "Lab 1.1 — OPNsense NVA", lesson: "Azure subnets start at .4 for usable host addresses. Never assume .1 is the appliance — always verify via the portal NIC blade after deployment." },
+  { source: "Lab 1.1 — OPNsense NVA", lesson: "OPNsense is FreeBSD — treat it as a network appliance OS, not a Linux server. BSD-specific diagnostic commands (logger -h, tcpdump -i hn1) must be documented from day one." },
+  { source: "Lab 1.1 — OPNsense NVA", lesson: "When Terraform rebuilds a VM, clear any SSH known_hosts entries for that IP on all other hosts that connect to it." },
+  { source: "Lab 1.2 — Network Segmentation", lesson: "Always set computer_name explicitly on Windows VMs in Terraform when the resource name exceeds 15 characters — the azurerm provider doesn't warn until apply time." },
+  { source: "Lab 1.2 — Network Segmentation", lesson: "Azure always reserves .1 as the subnet gateway. NAT+Pass with zero replies is always a return-path routing problem — not a firewall rule problem." },
+  { source: "Lab 1.2 — Network Segmentation", lesson: "In OPNsense and pfSense, rule order is everything. Block rules must always sit above catch-all allow rules, since rules evaluate top-to-bottom with first-match-wins." },
+];
+
+const architecture: DiagramRow[] = [
+  {
+    boxes: [{ title: "Internet", color: "perimeter" }],
+    arrowAfter: { label: "all inbound connection attempts" },
+  },
+  {
+    boxes: [{
+      title: "Azure NSG (WAN-facing)",
+      color: "perimeter",
+      lines: ["Allow: UDP 51820 (WireGuard only)", "Deny: all other inbound"],
+    }],
+    arrowAfter: {},
+  },
+  {
+    boxes: [{
+      title: "OPNsense NVA (FreeBSD 14.1)",
+      color: "security",
+      subtitle: "WAN hn0 10.40.0.4  ·  LAN hn1 10.40.1.4",
+      lines: ["WAN rules: block 22 / 3389, log the rest", "LAN rules: block SMB/RDP/RPC/NetBIOS", "NAT: outbound masquerade on WAN"],
+    }],
+    arrowAfter: { label: "UDR forces all subnet traffic through here" },
+  },
+  {
+    boxes: [
+      { title: "snet-mgmt", subtitle: "10.40.1.0/24", lines: ["Log Forwarder · 10.40.1.5"], color: "tooling" },
+      { title: "snet-workload", subtitle: "10.40.2.0/24", lines: ["VM-Workload1 · Ubuntu 24.04"], color: "internal" },
+      { title: "snet-client", subtitle: "10.40.3.0/24", lines: ["VM-Client · Windows 2025"], color: "internal" },
+    ],
+  },
+];
 
 const labs = [
   {
@@ -90,42 +132,16 @@ export default function Phase1Page() {
           <h2 className="text-2xl font-bold tracking-tight mb-5" style={{ color: "var(--text)" }}>Phase Architecture</h2>
           <div
             className="rounded-3xl p-8 overflow-x-auto"
-            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)", fontFamily: "var(--font-geist-mono)" }}
+            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}
           >
-            <pre className="text-xs leading-relaxed whitespace-pre" style={{ color: "var(--text-2)" }}>{`
-  Internet
-       │
-       ▼
-  ┌──────────────────────────────────────────┐
-  │  Azure NSG (WAN-facing)                  │
-  │  Allow: UDP 51820 (WireGuard VPN only)   │
-  │  Deny:  all other inbound ports          │
-  └─────────────────┬────────────────────────┘
-                    │
-                    ▼
-  ┌──────────────────────────────────────────┐
-  │  OPNsense NVA (FreeBSD 14.1)             │
-  │  WAN hn0: 10.40.0.4  (snet-wan)          │
-  │  LAN hn1: 10.40.1.4  (snet-mgmt)         │
-  │  WAN rules: Block 22 / 3389 / log rest   │
-  │  LAN rules: Block SMB/RDP/RPC/NetBIOS    │
-  │  NAT: outbound masquerade on WAN         │
-  │  Static routes → 10.40.2.0, 10.40.3.0   │
-  └──┬──────────────┬───────────────┬────────┘
-     │              │               │
-     ▼              ▼               ▼
-  snet-mgmt   snet-workload   snet-client
-  10.40.1.0   10.40.2.0/24   10.40.3.0/24
-  Log Fwd     VM-Workload1   VM-Client
-  10.40.1.5   Ubuntu 24.04   Windows 2025
-              10.40.2.4      10.40.3.4
-
-  UDR on snet-workload: 0.0.0.0/0 → 10.40.1.4
-  UDR on snet-client:   0.0.0.0/0 → 10.40.1.4
-
-  Admin access: WireGuard VPN (10.10.10.0/24) only
-  No SSH / RDP exposed on WAN interface
-`}</pre>
+            <FlowDiagram rows={architecture} />
+            <div className="mt-6 pt-5 space-y-1.5" style={{ borderTop: "1px solid var(--border)" }}>
+              <p className="text-xs font-mono" style={{ color: "var(--text-3)" }}>UDR on snet-workload: 0.0.0.0/0 → 10.40.1.4</p>
+              <p className="text-xs font-mono" style={{ color: "var(--text-3)" }}>UDR on snet-client: 0.0.0.0/0 → 10.40.1.4</p>
+              <p className="text-xs mt-3" style={{ color: "var(--text-3)" }}>
+                Admin access: WireGuard VPN (10.10.10.0/24) only — no SSH or RDP exposed on WAN.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -176,6 +192,9 @@ export default function Phase1Page() {
             ))}
           </div>
         </section>
+
+        {/* Key Learnings */}
+        <KeyLearningsRollup items={keyLearnings} />
 
         {/* Nav */}
         <div className="flex items-center justify-between pt-8" style={{ borderTop: "1px solid var(--border)" }}>

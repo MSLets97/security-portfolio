@@ -1,4 +1,67 @@
 import Link from "next/link";
+import { LabWalkthrough, WalkthroughStep } from "@/components/LabWalkthrough";
+import { FlowDiagram, DiagramRow } from "@/components/ArchitectureDiagram";
+import { CodeAndDocs, CodeLink } from "@/components/CodeLinks";
+
+const architecture: DiagramRow[] = [
+  { boxes: [{ title: "Azure VNet", subtitle: "10.40.0.0/16", color: "perimeter", lines: ["NSG rules evaluated on every packet"] }], arrowAfter: { label: "VNet Flow Log" } },
+  {
+    boxes: [{
+      title: "Network Watcher → Flow Log", color: "perimeter",
+      lines: ["Target: VNet (NSG flow logs retired Jun 2025)", "Retention: 7 days"],
+    }],
+    arrowAfter: {},
+  },
+  {
+    boxes: [{ title: "Storage Account", subtitle: "stflowlogs{suffix} — Terraform-managed", color: "tooling", lines: ["Container: insights-logs-flowlogflowevent", "Blob: JSON flow records per interval"] }],
+    arrowAfter: { label: "Traffic Analytics, 10-min aggregation" },
+  },
+  {
+    boxes: [{
+      title: "Log Analytics + Sentinel", color: "tooling",
+      lines: ["AzureNetworkAnalytics_CL: FlowType, PublicIPs,", "PrivateIPs, FlowDirection, Allowed/DeniedFlows", "Combined with Syslog table from Lab 2.1"],
+    }],
+  },
+];
+
+const codeLinks: CodeLink[] = [
+  {
+    label: "main.tf — resources 20, 22",
+    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/main.tf#L524-L541",
+    description: "Terraform-managed storage account, plus a code comment documenting why the flow log itself is created via the Portal, not Terraform.",
+  },
+];
+
+const walkthroughSteps: WalkthroughStep[] = [
+  {
+    title: "Attempt the originally planned NSG flow log",
+    what: "Try to create an NSG flow log via Terraform's azurerm_network_watcher_flow_log resource, targeting the WAN NSG directly.",
+    how: "terraform apply against the existing project, using the NSG flow log approach that was standard practice before this build.",
+    why: "This is the real first step taken, not a hypothetical — documenting the dead end matters because it's exactly what surfaced the underlying constraint: NsgFlowLogCreationBlocked, since Azure retired NSG flow log creation on June 30, 2025.",
+    where: "Terraform, in the project directory.",
+  },
+  {
+    title: "Pivot to VNet flow logs, split across Terraform and the Portal",
+    what: "Manage the storage account that will hold flow log data in Terraform, but create the actual VNet flow log resource itself through the Azure Portal.",
+    how: "azurerm_storage_account stays in Terraform; the flow log is created via Network Watcher → Flow Logs in the Portal, pointed at that Terraform-managed storage account.",
+    why: "VNet flow logs require the target_resource_id attribute, which only exists in azurerm provider 4.x. Upgrading the whole project to 4.x would break the azurerm_virtual_machine resource OPNsense depends on, since that resource type was removed in provider 4.0. Rather than force a breaking upgrade across the entire lab for one feature, the durable resource (storage) stays in Terraform and the resource the current provider can't yet express is created and documented as an intentional, commented exception in the Portal.",
+    where: "Terraform (storage account) + Azure Portal → Network Watcher → Flow Logs.",
+  },
+  {
+    title: "Enable Traffic Analytics on the flow log",
+    what: "Turn on Traffic Analytics with a 10-minute aggregation interval, forwarding into the same LAW-LogForwarder workspace already used for syslog.",
+    how: "Configured inline while creating the VNet flow log in the Portal — Traffic Analytics is a checkbox/config block on that same screen.",
+    why: "Raw flow log output is just JSON files sitting in blob storage — nothing reads them automatically. Traffic Analytics is what actually parses those blobs and forwards structured records into a queryable Log Analytics table; without it, the flow logs would just accumulate as unread files in storage.",
+    where: "Azure Portal → Network Watcher → Flow Logs → Traffic Analytics.",
+  },
+  {
+    title: "Confirm NSG flow data actually lands in Sentinel",
+    what: "Query the AzureNetworkAnalytics_CL table and confirm it's populated, alongside the existing Syslog table from Lab 2.1.",
+    how: "Sentinel → Logs → run a KQL query against AzureNetworkAnalytics_CL filtered to a recent time window.",
+    why: "This is a genuinely second, independent visibility layer, not a duplicate of Lab 2.1: OPNsense's filterlog only sees traffic that actually reaches the firewall NVA, while NSG flow data sees traffic the NSG itself drops before it ever gets that far. Confirming both tables are populated proves neither layer is blind to what the other one catches.",
+    where: "Microsoft Sentinel → Logs.",
+  },
+];
 
 const techs = [
   "Azure VNet Flow Logs", "Azure Network Watcher", "Traffic Analytics",
@@ -131,44 +194,20 @@ export default function VNetFlowLogsPage() {
           <h2 className="text-2xl font-bold tracking-tight mb-5" style={{ color: "var(--text)" }}>Architecture</h2>
           <div
             className="rounded-3xl p-8 overflow-x-auto"
-            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)", fontFamily: "var(--font-geist-mono)" }}
+            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}
           >
-            <pre className="text-xs leading-relaxed whitespace-pre" style={{ color: "var(--text-2)" }}>{`
-  Azure VNet (10.40.0.0/16)
-    NSG rules evaluated on every packet
-       │
-       │ VNet Flow Log
-       ▼
-  Azure Network Watcher
-  Flow Log: VNET-LogForwarder-rg-logforwarder-lab-flowlog
-  Target: VNet (not NSG — NSG flow logs retired Jun 30 2025)
-  Retention: 7 days
-       │
-       ▼
-  Storage Account: stflowlogs{suffix}  ← Terraform-managed
-  Container: insights-logs-flowlogflowevent
-  Blob: JSON flow records (per-interval)
-       │
-       │ Traffic Analytics (10-min aggregation)
-       ▼
-  Log Analytics Workspace: LAW-LogForwarder-{suffix}
-  Table: AzureNetworkAnalytics_CL
-    FlowType: MaliciousFlow / ExternalPublic / IntraVNet
-    PublicIPs, PublicPorts, PrivateIPs, PrivatePorts
-    FlowDirection: I (inbound) / O (outbound)
-    AllowedInFlows, DeniedInFlows, AllowedOutFlows
-       │
-       ▼
-  Microsoft Sentinel (on same workspace)
-  Combined with Syslog table for full network picture
-
-  Deployment model:
-  Terraform: storage account + all other lab resources
-  Portal:    VNet flow log + Traffic Analytics config
-             (azurerm 4.x required for target_resource_id)
-`}</pre>
+            <FlowDiagram rows={architecture} />
+            <p className="text-xs mt-6 pt-5" style={{ color: "var(--text-3)", borderTop: "1px solid var(--border)" }}>
+              Deployment model: Terraform manages the storage account and every other lab resource;
+              the VNet flow log and Traffic Analytics config are created via the Portal, since
+              target_resource_id requires azurerm 4.x, which would break the azurerm_virtual_machine
+              resource OPNsense depends on.
+            </p>
           </div>
         </section>
+
+        {/* Full Walkthrough */}
+        <LabWalkthrough steps={walkthroughSteps} />
 
         {/* Technologies */}
         <section className="mb-20">
@@ -253,6 +292,9 @@ export default function VNetFlowLogsPage() {
             </div>
           </div>
         </section>
+
+        {/* Code & Documentation */}
+        <CodeAndDocs links={codeLinks} />
 
         {/* Nav */}
         <div className="flex items-center justify-between pt-8" style={{ borderTop: "1px solid var(--border)" }}>

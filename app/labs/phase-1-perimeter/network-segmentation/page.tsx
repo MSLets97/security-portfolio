@@ -1,4 +1,79 @@
 import Link from "next/link";
+import { LabWalkthrough, WalkthroughStep } from "@/components/LabWalkthrough";
+import { FlowDiagram, DiagramRow } from "@/components/ArchitectureDiagram";
+import { CodeAndDocs, CodeLink } from "@/components/CodeLinks";
+
+const architecture: DiagramRow[] = [
+  {
+    boxes: [
+      { title: "snet-wan", subtitle: "10.40.0.0/24", lines: ["OPNsense WAN · 10.40.0.4"], color: "perimeter" },
+      { title: "snet-mgmt", subtitle: "10.40.1.0/24", lines: ["OPNsense LAN · 10.40.1.4", "Log Forwarder · 10.40.1.5"], color: "tooling" },
+      { title: "snet-workload", subtitle: "10.40.2.0/24", lines: ["VM-Workload1 · Ubuntu 24.04", "10.40.2.4"], color: "internal" },
+      { title: "snet-client", subtitle: "10.40.3.0/24", lines: ["VM-Client-User1 · Windows 2025", "10.40.3.4"], color: "internal" },
+    ],
+  },
+];
+
+const lanRules = [
+  { action: "BLOCK", proto: "SMB", port: "445" },
+  { action: "BLOCK", proto: "RDP", port: "3389" },
+  { action: "BLOCK", proto: "RPC", port: "135" },
+  { action: "BLOCK", proto: "NetBIOS", port: "139" },
+  { action: "ALLOW", proto: "Default allow LAN to any", port: "—" },
+];
+
+const codeLinks: CodeLink[] = [
+  {
+    label: "main.tf — resources 15–19",
+    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/main.tf#L412-L519",
+    description: "Workload route table, client/workload NICs, and the Windows Server 2025 / Ubuntu 24.04 VMs.",
+  },
+];
+
+const walkthroughSteps: WalkthroughStep[] = [
+  {
+    title: "Provision the new subnets and VMs",
+    what: "Terraform creates snet-workload (10.40.2.0/24) and snet-client (10.40.3.0/24), plus VM-Workload1 (Ubuntu 24.04) and VM-Client-User1 (Windows Server 2025).",
+    how: "terraform apply, with an explicit computer_name attribute set on the Windows VM resource rather than relying on the longer Terraform resource name.",
+    why: "Windows enforces a hard 15-character NetBIOS hostname limit, even on Server 2025. Azure defaults to using the Terraform resource name as the Windows computer name, so a resource name like VM-Client-User1-65s4 fails at apply time unless computer_name is set independently.",
+    where: "PowerShell, in the Terraform project directory.",
+  },
+  {
+    title: "Force all new-subnet traffic through OPNsense",
+    what: "Attach a User-Defined Route (0.0.0.0/0 → next hop 10.40.1.4, OPNsense's LAN IP) to both snet-workload and snet-client.",
+    how: "azurerm_route_table plus azurerm_subnet_route_table_association resources in Terraform, one per subnet.",
+    why: "Without a UDR, Azure's default system routes send VM-to-VM and VM-to-internet traffic directly between subnets, completely bypassing OPNsense. The firewall can't enforce or log anything it never sees — the UDR is what makes OPNsense the mandatory chokepoint instead of an optional one.",
+    where: "Terraform (main.tf), applied against the Azure VNet.",
+  },
+  {
+    title: "Point OPNsense's LAN gateway at the real Azure gateway",
+    what: "Set OPNsense's LAN gateway to 10.40.1.1 and add static routes for 10.40.2.0/24 and 10.40.3.0/24 via that gateway.",
+    how: "System → Gateways and System → Routing in the OPNsense GUI.",
+    why: "Azure always reserves .1 as the subnet's actual gateway address. A cloud-init default that doesn't match this (or missing static routes back to the new subnets) creates a return-path routing failure — outbound NAT looks correct in the firewall log, but replies never make it back to the originating VM, which looks identical to a firewall block until you check routing specifically.",
+    where: "OPNsense GUI → System → Routing.",
+  },
+  {
+    title: "Write LAN rules blocking lateral movement protocols",
+    what: "Add explicit OPNsense LAN rules blocking SMB (445), RDP (3389), RPC (135), and NetBIOS (139) from the client subnet to the workload subnet, each with logging enabled.",
+    how: "Firewall → Rules → LAN → Add, one rule per protocol/port, source 10.40.3.0/24, destination 10.40.2.0/24.",
+    why: "These four protocols are exactly what a compromised workstation would use to pivot toward a server on the network — blocking them simulates a real east-west security control, and enabling logging on each one means every attempt is provable, not just theoretically blocked.",
+    where: "OPNsense GUI → Firewall → Rules → LAN.",
+  },
+  {
+    title: "Order the block rules above the default allow",
+    what: "Move all four lateral-movement block rules above OPNsense's built-in \"Default allow LAN to any\" rule.",
+    how: "Drag-and-drop the rules using the rule list's drag handles, then Apply Changes.",
+    why: "OPNsense evaluates firewall rules top-to-bottom with first-match-wins, the same as pfSense. A block rule sitting below a catch-all allow rule will never fire — the allow rule already matched the traffic and let it through before the block rule is ever reached.",
+    where: "OPNsense GUI → Firewall → Rules → LAN (rule ordering).",
+  },
+  {
+    title: "Prove the blocks work end to end",
+    what: "From the client VM, attempt connections to the workload VM on ports 445, 3389, 135, and 139, and confirm both the failure on the client and a matching block entry in Sentinel.",
+    how: "PowerShell's Test-NetConnection from VM-Client-User1 (reached via WireGuard), cross-checked against the Sentinel Syslog table for the same timestamp.",
+    why: "A rule isn't proven by configuration alone — you need to see both halves of the same event: the connection genuinely failing on the client side, and the block genuinely logged on the firewall side, at the same moment.",
+    where: "PowerShell on the client VM + Microsoft Sentinel Logs blade.",
+  },
+];
 
 const techs = [
   "Azure Virtual Network", "Azure Subnets", "User-Defined Routes (UDR)",
@@ -110,43 +185,43 @@ export default function NetworkSegmentationPage() {
           <h2 className="text-2xl font-bold tracking-tight mb-5" style={{ color: "var(--text)" }}>Architecture</h2>
           <div
             className="rounded-3xl p-8 overflow-x-auto"
-            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)", fontFamily: "var(--font-geist-mono)" }}
+            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}
           >
-            <pre className="text-xs leading-relaxed whitespace-pre" style={{ color: "var(--text-2)" }}>{`
-  Azure VNet: 10.40.0.0/16
-  ┌─────────────────────────────────────────────────────┐
-  │                                                     │
-  │  snet-wan        snet-mgmt      snet-workload       │
-  │  10.40.0.0/24    10.40.1.0/24   10.40.2.0/24        │
-  │  OPNsense WAN    OPNsense LAN   VM-Workload1        │
-  │  10.40.0.4       10.40.1.4      Ubuntu 24.04        │
-  │                  Log Fwd        10.40.2.4           │
-  │                  10.40.1.5                          │
-  │                                                     │
-  │  snet-client                                        │
-  │  10.40.3.0/24                                       │
-  │  VM-Client-User1                                    │
-  │  Windows Server 2025                                │
-  │  10.40.3.4                                          │
-  │                                                     │
-  └─────────────────────────────────────────────────────┘
-
-  User-Defined Routes (UDR):
-  rt-snet-workload: 0.0.0.0/0 → NextHop 10.40.1.4 (OPNsense LAN)
-  rt-snet-client:   0.0.0.0/0 → NextHop 10.40.1.4 (OPNsense LAN)
-
-  OPNsense LAN rules (top to bottom — first match wins):
-  ┌──────────────────────────────────────────────────────┐
-  │ BLOCK  src 10.40.3.0/24  dst 10.40.2.0/24  p 445   │  SMB
-  │ BLOCK  src 10.40.3.0/24  dst 10.40.2.0/24  p 3389  │  RDP
-  │ BLOCK  src 10.40.3.0/24  dst 10.40.2.0/24  p 135   │  RPC
-  │ BLOCK  src 10.40.3.0/24  dst 10.40.2.0/24  p 139   │  NetBIOS
-  │ ALLOW  any  →  any  (Default allow LAN to any)      │
-  └──────────────────────────────────────────────────────┘
-  All blocked rules: logging enabled → filterlog → Sentinel
-`}</pre>
+            <FlowDiagram rows={architecture} />
+            <div className="mt-6 pt-5 space-y-1.5" style={{ borderTop: "1px solid var(--border)" }}>
+              <p className="text-xs font-mono" style={{ color: "var(--text-3)" }}>rt-snet-workload: 0.0.0.0/0 → NextHop 10.40.1.4 (OPNsense LAN)</p>
+              <p className="text-xs font-mono" style={{ color: "var(--text-3)" }}>rt-snet-client: 0.0.0.0/0 → NextHop 10.40.1.4 (OPNsense LAN)</p>
+            </div>
           </div>
         </section>
+
+        {/* LAN rule order */}
+        <section className="mb-20">
+          <h2 className="text-2xl font-bold tracking-tight mb-2" style={{ color: "var(--text)" }}>OPNsense LAN Rules</h2>
+          <p className="text-sm mb-5" style={{ color: "var(--text-3)" }}>
+            Evaluated top to bottom, first match wins — src 10.40.3.0/24 (client) → dst 10.40.2.0/24 (workload). All blocks log to Sentinel via filterlog.
+          </p>
+          <div className="rounded-3xl overflow-hidden" style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}>
+            <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+              {lanRules.map((r, i) => (
+                <div key={i} className="px-8 py-4 flex items-center gap-4">
+                  <span className="text-xs font-mono w-6 flex-shrink-0" style={{ color: "var(--text-3)" }}>{i + 1}</span>
+                  <span
+                    className="text-xs px-2.5 py-0.5 rounded-full font-medium font-mono flex-shrink-0"
+                    style={r.action === "BLOCK" ? { backgroundColor: "#ff453a18", color: "#ff453a" } : { backgroundColor: "#30d15820", color: "#30d158" }}
+                  >
+                    {r.action}
+                  </span>
+                  <span className="text-sm" style={{ color: "var(--text-2)" }}>{r.proto}</span>
+                  {r.port !== "—" && <span className="text-xs font-mono ml-auto" style={{ color: "var(--text-3)" }}>port {r.port}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Full Walkthrough */}
+        <LabWalkthrough steps={walkthroughSteps} />
 
         {/* Technologies */}
         <section className="mb-20">
@@ -231,6 +306,9 @@ export default function NetworkSegmentationPage() {
             </div>
           </div>
         </section>
+
+        {/* Code & Documentation */}
+        <CodeAndDocs links={codeLinks} />
 
         {/* Nav */}
         <div className="flex items-center justify-between pt-8" style={{ borderTop: "1px solid var(--border)" }}>

@@ -1,4 +1,83 @@
 import Link from "next/link";
+import { LabWalkthrough, WalkthroughStep } from "@/components/LabWalkthrough";
+import { FlowDiagram, DiagramRow } from "@/components/ArchitectureDiagram";
+import { CodeAndDocs, CodeLink } from "@/components/CodeLinks";
+
+const architecture: DiagramRow[] = [
+  {
+    boxes: [{
+      title: "OPNsense NVA", color: "security", subtitle: "10.40.1.4",
+      lines: ["filterlog → local0 syslog facility", "syslog-ng: s_opnsense → f_local0 → d_logfwd"],
+    }],
+    arrowAfter: { label: "UDP 514" },
+  },
+  {
+    boxes: [{
+      title: "Log Forwarder VM", color: "tooling", subtitle: "Ubuntu 22.04 — 10.40.1.5",
+      lines: ["rsyslog: imudp, UDPServerRun 514", "Azure Monitor Agent reads /var/log/syslog", "azureotelcollector (enabled via cloud-init)"],
+    }],
+    arrowAfter: { label: "HTTPS + DCR" },
+  },
+  {
+    boxes: [{
+      title: "Log Analytics Workspace", color: "tooling",
+      lines: ["DCR-Syslog: facility_names [\"local0\"]", "lifecycle { ignore_changes = all }", "Syslog table: Computer, Facility, SyslogMessage"],
+    }],
+  },
+];
+
+const codeLinks: CodeLink[] = [
+  {
+    label: "main.tf — resources 8, 10–14",
+    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/main.tf#L282-L407",
+    description: "Log Analytics workspace, log forwarder NIC + VM with cloud-init, Azure Monitor Agent extension, and the Data Collection Rule.",
+  },
+];
+
+const walkthroughSteps: WalkthroughStep[] = [
+  {
+    title: "Deploy the forwarder VM and the Sentinel workspace",
+    what: "terraform apply adds the Log Analytics workspace, Sentinel onboarding, the Ubuntu log-forwarder VM, and its Azure Monitor Agent extension to the existing Phase 1 infrastructure.",
+    how: "Same terraform apply workflow as Phase 1, run again from the project directory — only the new resources get created since OPNsense already exists.",
+    why: "A SIEM needs somewhere to send logs before it can receive any — the workspace and forwarder have to exist first, otherwise OPNsense would have nowhere valid to point its syslog target in the next step.",
+    where: "PowerShell, in the Terraform project directory.",
+  },
+  {
+    title: "Confirm rsyslog is actually listening on the forwarder",
+    what: "Check that UDP/TCP port 514 is bound on the forwarder VM, and that the AzureMonitorLinuxAgent extension shows \"Provisioning succeeded.\"",
+    how: "The forwarder has no public IP by design, so direct SSH isn't an option — instead, Azure Portal → the VM → Run command → RunShellScript, running ss -ulnp | grep 514 && ss -tlnp | grep 514.",
+    why: "If rsyslog isn't listening, nothing OPNsense sends will ever be received, no matter how correctly OPNsense itself is configured. Verifying the receiving end first isolates which half of the pipeline to debug if something doesn't work later.",
+    where: "Azure Portal → Virtual Machines → Run command.",
+  },
+  {
+    title: "Point OPNsense's syslog target at the forwarder",
+    what: "Add a logging target inside OPNsense: UDP transport, the forwarder's private IP, port 514, BSD/RFC 3164 format.",
+    how: "System → Settings → Logging / targets → Add, filling in the forwarder's private IP from the Terraform output.",
+    why: "BSD/RFC 3164 is the format rsyslog expects by default on the receiving end. Pointing at the forwarder's private IP — never a public one — keeps all log traffic inside the VNet, so it never touches the internet even in transit.",
+    where: "OPNsense GUI → System → Settings → Logging / targets.",
+  },
+  {
+    title: "Make sure the syslog facility matches on both ends",
+    what: "Confirm OPNsense's filterlog facility and the Terraform Data Collection Rule's facility_names both target the same value.",
+    how: "filterlog uses facility local0 — both the OPNsense-side filter and the DCR's facility_names list need to say [\"local0\"], not a different local facility.",
+    why: "Syslog has several independent facility channels. If the receiving side filters on a different facility than the sender actually uses, every message is silently discarded with no error on either side — a facility mismatch is the single most common reason a syslog pipeline looks fully connected but carries zero data.",
+    where: "OPNsense syslog-ng configuration + Terraform main.tf (the DCR resource).",
+  },
+  {
+    title: "Confirm events are actually reaching Sentinel",
+    what: "Run a KQL query against the Syslog table scoped to the last 30 minutes and look for real rows.",
+    how: "Microsoft Sentinel → Logs → run Syslog | where TimeGenerated > ago(30m) | order by TimeGenerated desc.",
+    why: "An agent showing \"Heartbeat\" only proves the agent binary is alive — it says nothing about whether log content is flowing through it. Only seeing real filterlog rows in the table proves the entire chain, end to end, actually works.",
+    where: "Microsoft Sentinel → Logs blade.",
+  },
+  {
+    title: "Make the pipeline survive reboots and Sentinel's own changes",
+    what: "Persist the azureotelcollector service across VM restarts, and stop Terraform from fighting Sentinel's automatic edits to the Data Collection Rule.",
+    how: "Bake systemctl enable azureotelcollector into the VM's cloud-init; add lifecycle { ignore_changes = all } to the azurerm_monitor_data_collection_rule resource.",
+    why: "azureotelcollector doesn't auto-start on every boot by default, and Sentinel automatically modifies DCRs after creation (adding extra facilities and a kind=\"Linux\" attribute) as part of its own workspace onboarding — without both fixes, the pipeline silently breaks on the next reboot, or the next terraform apply tries to destroy and recreate the DCR.",
+    where: "cloud-init script (Terraform custom_data) + main.tf.",
+  },
+];
 
 const techs = [
   "syslog-ng", "rsyslog", "Azure Monitor Agent (AMA)", "Data Collection Rules (DCR)",
@@ -119,42 +198,14 @@ export default function SyslogPipelinePage() {
           <h2 className="text-2xl font-bold tracking-tight mb-5" style={{ color: "var(--text)" }}>Architecture</h2>
           <div
             className="rounded-3xl p-8 overflow-x-auto"
-            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)", fontFamily: "var(--font-geist-mono)" }}
+            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}
           >
-            <pre className="text-xs leading-relaxed whitespace-pre" style={{ color: "var(--text-2)" }}>{`
-  OPNsense NVA (10.40.1.4)
-  ┌────────────────────────────────────────┐
-  │  filterlog → local0 syslog facility    │
-  │  syslog-ng process:                    │
-  │    source  s_opnsense { internal(); }  │
-  │    filter  f_local0   { facility(local0); }
-  │    dest    d_logfwd   { udp("10.40.1.5" port(514)); }
-  └──────────────┬─────────────────────────┘
-                 │ UDP 514
-                 ▼
-  Log Forwarder VM (Ubuntu 22.04 — 10.40.1.5)
-  ┌────────────────────────────────────────┐
-  │  rsyslog: $ModLoad imudp               │
-  │           $UDPServerRun 514            │
-  │  Azure Monitor Agent (AMA)             │
-  │    reads /var/log/syslog               │
-  │  azureotelcollector (enabled via init) │
-  │    ships to Log Analytics → HTTPS      │
-  └──────────────┬─────────────────────────┘
-                 │ HTTPS + DCR
-                 ▼
-  Log Analytics Workspace
-  ┌────────────────────────────────────────┐
-  │  DCR-Syslog:                           │
-  │    facility_names: ["local0"]          │
-  │    lifecycle { ignore_changes = all }  │
-  │  Syslog table:                         │
-  │    Computer, Facility, SyslogMessage   │
-  │    TimeGenerated, HostIP               │
-  └────────────────────────────────────────┘
-`}</pre>
+            <FlowDiagram rows={architecture} />
           </div>
         </section>
+
+        {/* Full Walkthrough */}
+        <LabWalkthrough steps={walkthroughSteps} />
 
         {/* Technologies */}
         <section className="mb-20">
@@ -239,6 +290,9 @@ export default function SyslogPipelinePage() {
             </div>
           </div>
         </section>
+
+        {/* Code & Documentation */}
+        <CodeAndDocs links={codeLinks} />
 
         {/* Nav */}
         <div className="flex items-center justify-between pt-8" style={{ borderTop: "1px solid var(--border)" }}>

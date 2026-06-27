@@ -1,4 +1,95 @@
 import Link from "next/link";
+import { LabWalkthrough, WalkthroughStep } from "@/components/LabWalkthrough";
+import { FlowDiagram, DiagramRow } from "@/components/ArchitectureDiagram";
+import { CodeAndDocs, CodeLink } from "@/components/CodeLinks";
+
+const architecture: DiagramRow[] = [
+  { boxes: [{ title: "Internet", color: "perimeter", lines: ["inbound connection attempts"] }], arrowAfter: { label: "WireGuard tunnel only" } },
+  {
+    boxes: [{
+      title: "Azure NSG — WAN-facing", color: "perimeter",
+      lines: ["Rule 100: Allow UDP 51820 (WireGuard)", "Rule 900: Deny all inbound"],
+    }],
+    arrowAfter: {},
+  },
+  {
+    boxes: [{
+      title: "OPNsense NVA (FreeBSD 14.1)", color: "security",
+      subtitle: "Standard_B2s · 2 vCPU · 4 GB RAM",
+      lines: [
+        "WAN hn0 10.40.0.4 — block 22, block 3389,",
+        "pass UDP 51820, block+log the rest",
+        "LAN hn1 10.40.1.4 — NAT outbound, gateway",
+        "for 10.40.1.0/24, WireGuard peer 10.10.10.0/24",
+      ],
+    }],
+  },
+];
+
+const codeLinks: CodeLink[] = [
+  {
+    label: "main.tf — resources 1–7",
+    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/main.tf#L26-L277",
+    description: "VNet, subnets, WAN NSG, dual NICs, the OPNsense VM, the client route table, and the install provisioner.",
+  },
+  {
+    label: "variables.tf",
+    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/variables.tf",
+    description: "All input variables, including admin_ssh_source_cidr / admin_rdp_source_cidr for locking down WAN access.",
+  },
+];
+
+const walkthroughSteps: WalkthroughStep[] = [
+  {
+    title: "Provision the network skeleton with Terraform",
+    what: "A single terraform apply creates the VNet, WAN/LAN/workload/client subnets, the WAN-facing NSG, a public IP, and the OPNsense VM with its two NICs.",
+    how: "Run from the project root; Terraform prompts interactively for the admin password at apply time and asks for a typed yes to confirm.",
+    why: "Defining every resource as code means the lab can be destroyed and rebuilt identically every session — and keeping the admin password out of any file (only entered at the interactive prompt) means there's nothing sensitive sitting in a tfvars file that could leak.",
+    where: "PowerShell, in the Terraform project directory.",
+  },
+  {
+    title: "Log into OPNsense for the first time",
+    what: "Open the OPNsense web UI at the VM's public IP and authenticate as root.",
+    how: "Browse to https://<opnsense-public-ip>, accept the self-signed certificate warning, then sign in with the password set during terraform apply.",
+    why: "The certificate warning is expected — OPNsense ships with a self-signed cert out of the box, not a sign of a problem. Logging in successfully is the first proof the VM booted and both NICs attached correctly, before any configuration begins.",
+    where: "Browser, against the OPNsense WAN public IP shown in the Terraform output.",
+  },
+  {
+    title: "Verify WAN and LAN interface assignment",
+    what: "Confirm the WAN interface shows an address in the 10.40.0.x range and LAN shows 10.40.1.x, both marked UP.",
+    how: "Interfaces → Overview in the OPNsense GUI.",
+    why: "Azure automatically reserves the first four addresses in every subnet for its own platform use, so the appliance never actually gets the .1 address you might expect. Verifying the real assigned IPs upfront — rather than assuming .1 — avoids hours of confused troubleshooting later when something doesn't connect.",
+    where: "OPNsense GUI → Interfaces → Overview.",
+  },
+  {
+    title: "Set a strong root password inside OPNsense",
+    what: "Change the root account's password to a strong, independently-chosen value inside the OPNsense GUI itself.",
+    how: "System → Access → Users → edit root → set a 16+ character password → Save → re-authenticate.",
+    why: "The Terraform admin_password is a one-time bootstrap credential typed at apply time. Rotating it inside the GUI creates a separate, stronger credential for the ongoing web session, so a single leaked value doesn't compromise both the infrastructure provisioning path and the live firewall.",
+    where: "OPNsense GUI → System → Access → Users.",
+  },
+  {
+    title: "Review the default firewall posture before changing anything",
+    what: "Inspect the out-of-the-box WAN rules (default deny all inbound) and LAN rules (default allow outbound).",
+    how: "Firewall → Rules → WAN, then Firewall → Rules → LAN — read-only at this stage.",
+    why: "You have to know the starting baseline before adding anything. It's also the point where the two independent firewall layers become clear: Azure's NSG (platform-level, evaluated first) and OPNsense's own ruleset (inside the VM) are both in the path — traffic has to pass both, and opening a port in one without the other still results in a block.",
+    where: "OPNsense GUI → Firewall → Rules.",
+  },
+  {
+    title: "Lock WAN down explicitly and add the WireGuard exception",
+    what: "Add explicit WAN rules blocking TCP 22 (SSH) and TCP 3389 (RDP), a pass rule for UDP 51820 (WireGuard), and a catch-all block-and-log rule for everything else.",
+    how: "Firewall → Rules → WAN → Add, ordered top to bottom so the explicit rules are evaluated before the catch-all.",
+    why: "SSH and RDP are the two ports almost every internet-facing host gets scanned for within minutes — blocking them explicitly (rather than relying only on default-deny) makes the intent visible in the ruleset itself. WireGuard is the single sanctioned remote-admin path, deliberately not riding on the standard SSH/RDP ports an attacker would target first.",
+    where: "OPNsense GUI → Firewall → Rules → WAN.",
+  },
+  {
+    title: "Prove the firewall is actually evaluating live traffic",
+    what: "Check the firewall's connection state table and confirm your own browser session to the OPNsense web UI appears in it.",
+    how: "Firewall → Diagnostics → States.",
+    why: "A rule that looks correct in the configuration screen isn't proof it works. Seeing a real, live connection entry in the state table confirms OPNsense is actually inspecting and tracking real traffic, not just holding configuration that's never been exercised.",
+    where: "OPNsense GUI → Firewall → Diagnostics → States.",
+  },
+];
 
 const techs = [
   "Microsoft Azure", "Terraform (azurerm ~3.0)", "OPNsense (FreeBSD 14.1)",
@@ -110,47 +201,24 @@ export default function OPNsenseNVAPage() {
           <h2 className="text-2xl font-bold tracking-tight mb-5" style={{ color: "var(--text)" }}>Architecture</h2>
           <div
             className="rounded-3xl p-8 overflow-x-auto"
-            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)", fontFamily: "var(--font-geist-mono)" }}
+            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}
           >
-            <pre className="text-xs leading-relaxed whitespace-pre" style={{ color: "var(--text-2)" }}>{`
-  Internet (inbound connection attempts)
-       │
-       ▼
-  ┌──────────────────────────────────────────┐
-  │  Azure NSG — WAN-facing                  │
-  │  Rule 100: Allow UDP 51820 (WireGuard)   │
-  │  Rule 900: Deny all inbound              │
-  └─────────────────┬────────────────────────┘
-                    │ WireGuard tunnel only
-                    ▼
-  ┌──────────────────────────────────────────┐
-  │  OPNsense NVA (FreeBSD 14.1)             │
-  │  VM: Standard_B2s, 2 vCPU, 4 GB RAM      │
-  │                                          │
-  │  WAN hn0: 10.40.0.4 (snet-wan)           │
-  │    Public IP: [dynamic]                  │
-  │    Rule: Block TCP 22 (SSH)              │
-  │    Rule: Block TCP 3389 (RDP)            │
-  │    Rule: Pass UDP 51820 (WireGuard)      │
-  │    Rule: Block + Log all other inbound   │
-  │                                          │
-  │  LAN hn1: 10.40.1.4 (snet-mgmt)         │
-  │    NAT outbound masquerade on WAN        │
-  │    DHCP disabled — static assignments    │
-  │    Gateway for 10.40.1.0/24             │
-  │    WireGuard peer: 10.10.10.0/24         │
-  └──────────────────────────────────────────┘
-
-  Provisioned entirely with Terraform:
-  - azurerm_virtual_machine (FreeBSD image)
-  - azurerm_network_interface × 2 (WAN, LAN)
-  - azurerm_public_ip (WAN)
-  - azurerm_network_security_group (WAN NSG)
-  - azurerm_virtual_network + 2 subnets
-  - cloud-init: OPNsense bootstrap script
-`}</pre>
+            <FlowDiagram rows={architecture} />
+            <div className="mt-6 pt-5" style={{ borderTop: "1px solid var(--border)" }}>
+              <p className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: "var(--text-3)" }}>
+                Provisioned entirely with Terraform
+              </p>
+              <p className="text-xs font-mono leading-relaxed" style={{ color: "var(--text-3)" }}>
+                azurerm_virtual_machine (FreeBSD image) · azurerm_network_interface × 2 (WAN, LAN) ·
+                azurerm_public_ip (WAN) · azurerm_network_security_group (WAN NSG) ·
+                azurerm_virtual_network + 2 subnets · cloud-init OPNsense bootstrap script
+              </p>
+            </div>
           </div>
         </section>
+
+        {/* Full Walkthrough */}
+        <LabWalkthrough steps={walkthroughSteps} />
 
         {/* Technologies */}
         <section className="mb-20">
@@ -235,6 +303,9 @@ export default function OPNsenseNVAPage() {
             </div>
           </div>
         </section>
+
+        {/* Code & Documentation */}
+        <CodeAndDocs links={codeLinks} />
 
         {/* Nav */}
         <div className="flex items-center justify-between pt-8" style={{ borderTop: "1px solid var(--border)" }}>

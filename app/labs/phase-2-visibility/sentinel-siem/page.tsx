@@ -1,4 +1,52 @@
 import Link from "next/link";
+import { LabWalkthrough, WalkthroughStep } from "@/components/LabWalkthrough";
+import { CodeAndDocs, CodeLink } from "@/components/CodeLinks";
+
+const codeLinks: CodeLink[] = [
+  {
+    label: "main.tf — resource 9",
+    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/main.tf#L292-L295",
+    description: "The azurerm_sentinel_log_analytics_workspace_onboarding resource. The Content Hub parser, attack simulations, and KQL queries on this page are configured directly in Sentinel, not in Terraform.",
+  },
+];
+
+const walkthroughSteps: WalkthroughStep[] = [
+  {
+    title: "Confirm Sentinel is onboarded to the right workspace",
+    what: "Verify Microsoft Sentinel is enabled on the same Log Analytics workspace already receiving syslog data from Lab 2.1.",
+    how: "Azure Portal → Microsoft Sentinel → confirm the workspace shown matches LAW-LogForwarder (already provisioned by Terraform's azurerm_sentinel_log_analytics_workspace_onboarding resource).",
+    why: "Sentinel is a layer on top of Log Analytics, not a separate datastore. Using the same workspace means the syslog data already flowing from Lab 2.1 is immediately queryable — there's no second log-shipping path to build.",
+    where: "Azure Portal → Microsoft Sentinel.",
+  },
+  {
+    title: "Install the Content Hub parser for OPNsense logs",
+    what: "Install the pfSense/OPNsense Content Hub solution so raw filterlog CSV becomes named, structured fields.",
+    how: "Sentinel → Content Hub → search \"pfSense\" → Install.",
+    why: "filterlog arrives as one long, unlabelled comma-separated line. Without a parser, every single KQL query would need its own manual split()/extract() logic; the parser does that translation once so later queries can reference fields like Action or SrcIP directly.",
+    where: "Microsoft Sentinel → Content Hub.",
+  },
+  {
+    title: "Simulate known attacks from a controlled source",
+    what: "Run SSH brute-force and reverse-shell probes from outside the VNet, an RDP scan, and SMB/RDP lateral-movement attempts from the client VM.",
+    how: "curl/netcat for the WAN-facing tests from an external host; PowerShell's Test-NetConnection from VM-Client-User1 (via WireGuard) for the LAN lateral-movement tests.",
+    why: "A known, controlled-source attack lets you verify the entire detection chain on your own schedule and confirm exactly which log entry it should produce — rather than waiting indefinitely for real attack traffic to validate that the pipeline works at all.",
+    where: "External test host (WAN tests) + VM-Client-User1 via WireGuard (LAN tests).",
+  },
+  {
+    title: "Write KQL to parse filterlog into queryable fields",
+    what: "Query the Syslog table, split the filterlog CSV into named fields (Action, Protocol, SrcIP, DstIP, DstPort), and filter to Action == \"block\".",
+    how: "Sentinel → Logs → KQL editor, using split() and extract() against the raw SyslogMessage column.",
+    why: "A raw log line on its own isn't an answer to anything. Turning it into typed, named fields is what makes the data hunt-able — for example, being able to ask \"show me every distinct source IP blocked in the last 24 hours\" as a one-line query instead of manually reading log text.",
+    where: "Microsoft Sentinel → Logs.",
+  },
+  {
+    title: "Open the WAN briefly and observe real attack traffic",
+    what: "Temporarily widen the Azure NSG to allow all inbound ports for about 30 minutes, then review what OPNsense blocks.",
+    how: "Change the NSG rule in the Azure Portal, wait, then immediately query Sentinel for filterlog block events during that window, before reverting the NSG change.",
+    why: "Simulated attacks prove the detection pipeline works in principle; real, unsolicited internet scanner traffic (LDAP, Elasticsearch, VNC, Grafana, and Telnet probes all arrived within minutes in this lab) proves what the perimeter is actually defending against in practice, and how immediately scanning begins the moment a port is reachable.",
+    where: "Azure Portal NSG rules + Microsoft Sentinel Logs.",
+  },
+];
 
 const techs = [
   "Microsoft Sentinel", "KQL (Kusto Query Language)", "Azure Log Analytics",
@@ -121,6 +169,9 @@ export default function SentinelSIEMPage() {
           </div>
         </section>
 
+        {/* Full Walkthrough */}
+        <LabWalkthrough steps={walkthroughSteps} />
+
         {/* Technologies */}
         <section className="mb-20">
           <h2 className="text-2xl font-bold tracking-tight mb-5" style={{ color: "var(--text)" }}>Technologies Used</h2>
@@ -230,6 +281,9 @@ export default function SentinelSIEMPage() {
             </div>
           </div>
         </section>
+
+        {/* Code & Documentation */}
+        <CodeAndDocs links={codeLinks} />
 
         {/* Nav */}
         <div className="flex items-center justify-between pt-8" style={{ borderTop: "1px solid var(--border)" }}>

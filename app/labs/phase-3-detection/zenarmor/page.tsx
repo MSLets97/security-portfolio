@@ -1,4 +1,62 @@
 import Link from "next/link";
+import { LabWalkthrough, WalkthroughStep } from "@/components/LabWalkthrough";
+import { FlowDiagram, DiagramRow } from "@/components/ArchitectureDiagram";
+import { CodeAndDocs } from "@/components/CodeLinks";
+
+const architecture: DiagramRow[] = [
+  { boxes: [{ title: "Inbound traffic", subtitle: "WAN or LAN", color: "perimeter" }], arrowAfter: {} },
+  {
+    boxes: [{
+      title: "Zenarmor (NGF layer)", color: "security",
+      lines: ["1. DNS query → cloud reputation check → block if malicious", "2. Connection → application ID + TLS SNI classification", "3. Block or allow based on NGF policy"],
+    }],
+    arrowAfter: { label: "traffic that passes Zenarmor" },
+  },
+  {
+    boxes: [{
+      title: "OPNsense stateful firewall", color: "security",
+      lines: ["WAN rules: block 22, 3389, log all blocked", "LAN rules: block SMB/RDP/RPC/NetBIOS"],
+    }],
+  },
+];
+
+const walkthroughSteps: WalkthroughStep[] = [
+  {
+    title: "Install the Zenarmor plugin",
+    what: "Install Zenarmor from OPNsense's plugin repository.",
+    how: "System → Firmware → Plugins, search \"zenarmor\" (or sensei), click install.",
+    why: "Like all OPNsense add-ons, Zenarmor ships as a plugin that runs inside the existing firewall process rather than as a separate appliance — no new VM, no new Terraform resource, no new attack surface to manage.",
+    where: "OPNsense GUI → System → Firmware → Plugins.",
+  },
+  {
+    title: "Run the setup wizard and attach it to the WAN interface",
+    what: "Walk through Zenarmor's first-run setup wizard and bind it to the WAN interface so it inspects internet-facing traffic.",
+    how: "Services → Zenarmor → Setup Wizard, selecting WAN (and optionally LAN) as the monitored interface(s).",
+    why: "Zenarmor needs to be told which interface's traffic to inspect — attaching it to WAN means it sees the same internet-facing traffic the firewall and Suricata also inspect, giving a consistent inspection point across all three detection layers.",
+    where: "OPNsense GUI → Zenarmor → Setup Wizard.",
+  },
+  {
+    title: "Enable the cloud threat intelligence feed",
+    what: "Turn on Zenarmor's cloud-based domain/IP reputation checking.",
+    how: "Enabled by default as part of the setup wizard — confirmed active under Zenarmor → Cloud Connectivity.",
+    why: "A static signature file goes stale the moment it's downloaded. A cloud feed means a domain that turns malicious today gets blocked today, on every subsequent DNS lookup, without waiting for a manual rule update cycle.",
+    where: "OPNsense GUI → Zenarmor → Cloud Connectivity.",
+  },
+  {
+    title: "Confirm DNS-layer blocking actually stops a connection",
+    what: "Attempt to resolve and connect to a known-malicious test domain, and confirm it's blocked before any TCP connection is established.",
+    how: "curl or nslookup against a reputation-flagged test domain from a lab client VM.",
+    why: "Blocking at the DNS layer — before a TCP handshake even starts — is strictly earlier and safer than blocking after a connection attempt is already underway. By the time a Layer 3/4 firewall rule could react to a connection, a DNS-layer block has already stopped it from happening at all, even if the destination IP itself looks clean.",
+    where: "Test client VM, accessed via WireGuard.",
+  },
+  {
+    title: "Confirm application-layer visibility on real traffic",
+    what: "Generate normal browsing traffic from a lab client and review how Zenarmor classified each connection.",
+    how: "Browse normally, then check Zenarmor → Insights/Dashboard for the application and TLS SNI identified behind each connection.",
+    why: "A Layer 3/4 firewall only ever sees \"port 443 traffic\" — it can't tell a legitimate HTTPS session from a non-HTTP protocol tunnelling through the same port to evade a simple port-based rule. Zenarmor identifies the actual application and TLS SNI behind the connection, which is exactly what catches that kind of evasion.",
+    where: "OPNsense GUI → Zenarmor → Dashboard / Insights.",
+  },
+];
 
 const techs = [
   "Zenarmor (NGF plugin)", "OPNsense (FreeBSD 14.1)", "Cloud threat intelligence",
@@ -115,36 +173,17 @@ export default function ZenarmorPage() {
           <h2 className="text-2xl font-bold tracking-tight mb-5" style={{ color: "var(--text)" }}>Where It Sits in the Stack</h2>
           <div
             className="rounded-3xl p-8 overflow-x-auto"
-            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)", fontFamily: "var(--font-geist-mono)" }}
+            style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}
           >
-            <pre className="text-xs leading-relaxed whitespace-pre" style={{ color: "var(--text-2)" }}>{`
-  Inbound traffic (WAN or LAN)
-       │
-       ▼
-  ┌─────────────────────────────────────────────┐
-  │  Zenarmor (NGF layer — runs on OPNsense)    │
-  │  1. DNS query intercepted                   │
-  │     → cloud reputation check               │
-  │     → block if malicious domain            │
-  │  2. Connection established                  │
-  │     → application identification           │
-  │     → TLS SNI classification               │
-  │     → category/reputation verdict          │
-  │  3. Block or allow based on NGF policy      │
-  └──────────────────┬──────────────────────────┘
-                     │ (traffic that passes Zenarmor)
-                     ▼
-  ┌─────────────────────────────────────────────┐
-  │  OPNsense stateful firewall rules           │
-  │  WAN rules: Block 22, 3389, log all blocked │
-  │  LAN rules: Block SMB/RDP/RPC/NetBIOS       │
-  └─────────────────────────────────────────────┘
-
-  Zenarmor verdict → OPNsense block event → filterlog
-  filterlog → syslog-ng → Log Forwarder → Sentinel
-`}</pre>
+            <FlowDiagram rows={architecture} />
+            <p className="text-xs mt-6 pt-5" style={{ color: "var(--text-3)", borderTop: "1px solid var(--border)" }}>
+              Zenarmor verdict → OPNsense block event → filterlog → syslog-ng → Log Forwarder → Sentinel.
+            </p>
           </div>
         </section>
+
+        {/* Full Walkthrough */}
+        <LabWalkthrough steps={walkthroughSteps} />
 
         {/* Technologies */}
         <section className="mb-20">
@@ -197,6 +236,9 @@ export default function ZenarmorPage() {
             </div>
           </div>
         </section>
+
+        {/* Code & Documentation */}
+        <CodeAndDocs links={[]} note="Zenarmor was installed and configured entirely through the OPNsense plugin manager GUI — no new Terraform resources for this lab." />
 
         {/* Nav */}
         <div className="flex items-center justify-between pt-8" style={{ borderTop: "1px solid var(--border)" }}>
