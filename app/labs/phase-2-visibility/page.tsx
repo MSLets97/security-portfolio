@@ -1,6 +1,42 @@
 import Link from "next/link";
 import { FlowDiagram, DiagramRow } from "@/components/ArchitectureDiagram";
 import { KeyLearningsRollup, KeyLearning } from "@/components/KeyLearningsRollup";
+import { ProblemNarrative } from "@/components/ProblemNarrative";
+import { ChallengesLessons } from "@/components/ChallengesLessons";
+import { KeyMetrics } from "@/components/KeyMetrics";
+import { BuildSequence, BuildStep } from "@/components/BuildSequence";
+
+const problemNarrative =
+  "Raw firewall logs sitting on a VM are useless for security investigation — they need to reach a SIEM. " +
+  "Built a syslog-ng to Azure Monitor Agent pipeline that forwards OPNsense filterlog to Microsoft Sentinel, " +
+  "then wrote KQL parsers to extract structured fields from raw CSV-formatted packet logs. Result: queryable, " +
+  "structured firewall telemetry available in Sentinel for threat hunting.";
+
+const lessonsLearned = [
+  "OPNsense filterlog format is CSV with positional fields, not key-value pairs — KQL parsing requires extract() with regex and positional indexing, not simple split operations.",
+  "Azure Monitor Agent collects syslog by facility — if the facility isn't listed in the DCR data source, logs arrive on the Linux forwarder but are silently dropped before reaching Sentinel.",
+  "VNet Flow Logs require the azurerm provider v4.x which breaks the deprecated azurerm_virtual_machine resource — documented the constraint and created the flow log resource manually in the portal instead of fighting the provider version.",
+  "syslog-ng on FreeBSD (OPNsense) uses different log paths than Linux — /var/log/syslog does not exist; OPNsense uses its own log structure under /var/log/ with clog-formatted binary files.",
+];
+
+const keyMetrics = [
+  { label: "Log Pipeline", value: "3 hops (OPNsense → forwarder → Sentinel)" },
+  { label: "Facilities Configured", value: "local0 (firewall)" },
+  { label: "KQL Queries Written", value: "5+ parsing and hunting queries" },
+  { label: "Sentinel Table", value: "Syslog (structured via KQL parsing)" },
+  { label: "Latency", value: "<60 seconds from packet to Sentinel" },
+];
+
+const buildSequence: BuildStep[] = [
+  { title: "Deploy Linux forwarder VM in management subnet" },
+  { title: "Install and configure rsyslog to listen on UDP/TCP 514" },
+  { title: "Configure OPNsense remote syslog to forward to forwarder IP" },
+  { title: "Deploy Azure Monitor Agent extension on forwarder" },
+  { title: "Create DCR with syslog data source (local0 facility)" },
+  { title: "Onboard Microsoft Sentinel to Log Analytics Workspace" },
+  { title: "Write KQL parser for OPNsense filterlog format" },
+  { title: "Verify end-to-end: packet on WAN → Sentinel Syslog table" },
+];
 
 const architecture: DiagramRow[] = [
   {
@@ -107,6 +143,8 @@ export default function Phase2Page() {
           </p>
         </div>
 
+        <ProblemNarrative text={problemNarrative} />
+
         {/* What this phase proves */}
         <section className="mb-20">
           <h2 className="text-2xl font-bold tracking-tight mb-5" style={{ color: "var(--text)" }}>What This Phase Proves</h2>
@@ -185,6 +223,15 @@ export default function Phase2Page() {
             ))}
           </div>
         </section>
+
+        {/* Build Sequence */}
+        <BuildSequence steps={buildSequence} />
+
+        {/* Key Metrics */}
+        <KeyMetrics metrics={keyMetrics} />
+
+        {/* Challenges & Lessons Learned */}
+        <ChallengesLessons items={lessonsLearned} />
 
         {/* Key Learnings */}
         <KeyLearningsRollup items={keyLearnings} />

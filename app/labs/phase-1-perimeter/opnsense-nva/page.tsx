@@ -29,12 +29,12 @@ const architecture: DiagramRow[] = [
 const codeLinks: CodeLink[] = [
   {
     label: "main.tf — resources 1–7",
-    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/main.tf#L26-L277",
+    href: "https://github.com/MSLets97/net-sec-hybrid-lab/blob/main/main.tf#L26-L277",
     description: "VNet, subnets, WAN NSG, dual NICs, the OPNsense VM, the client route table, and the install provisioner.",
   },
   {
     label: "variables.tf",
-    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/variables.tf",
+    href: "https://github.com/MSLets97/net-sec-hybrid-lab/blob/main/variables.tf",
     description: "All input variables, including admin_ssh_source_cidr / admin_rdp_source_cidr for locking down WAN access.",
   },
 ];

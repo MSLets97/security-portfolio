@@ -29,7 +29,7 @@ const architecture: DiagramRow[] = [
 const codeLinks: CodeLink[] = [
   {
     label: "main.tf — resources 8, 10–14",
-    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/main.tf#L282-L407",
+    href: "https://github.com/MSLets97/net-sec-hybrid-lab/blob/main/main.tf#L282-L407",
     description: "Log Analytics workspace, log forwarder NIC + VM with cloud-init, Azure Monitor Agent extension, and the Data Collection Rule.",
   },
 ];

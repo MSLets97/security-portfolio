@@ -1,6 +1,42 @@
 import Link from "next/link";
 import { FlowDiagram, DiagramRow } from "@/components/ArchitectureDiagram";
 import { KeyLearningsRollup, KeyLearning } from "@/components/KeyLearningsRollup";
+import { ProblemNarrative } from "@/components/ProblemNarrative";
+import { ChallengesLessons } from "@/components/ChallengesLessons";
+import { KeyMetrics } from "@/components/KeyMetrics";
+import { BuildSequence, BuildStep } from "@/components/BuildSequence";
+
+const problemNarrative =
+  "Needed a production-grade perimeter firewall on Azure without using Azure Firewall's $1,000/month cost. " +
+  "Deployed OPNsense as a dual-homed NVA with full hub-and-spoke IaC in Terraform, including WireGuard for " +
+  "zero-trust management access. Result: fully functional four-subnet segmented architecture with stateful " +
+  "inspection and VPN for under $20/month.";
+
+const lessonsLearned = [
+  "Discovered that OPNsense on Azure requires IP forwarding enabled on BOTH NICs separately — enabling it on only the WAN NIC caused routing to silently fail with no error message.",
+  "Terraform's remote-exec provisioner requires the VM to be fully booted before SSH is available — added a depends_on and sleep timer to prevent race conditions on first deploy.",
+  "WireGuard VPN on OPNsense requires the WireGuard interface to be added to the LAN firewall rules, not the WAN rules — took significant debugging to understand the traffic flow.",
+  "Azure NSGs and OPNsense firewall rules are independent layers — traffic blocked at NSG level never reaches OPNsense, which means NSG rules must be permissive enough to let OPNsense handle the actual inspection.",
+];
+
+const keyMetrics = [
+  { label: "Terraform Resources", value: "31 managed resources" },
+  { label: "Monthly Cost", value: "<$20 USD (Azure B-series VMs)" },
+  { label: "Subnets Deployed", value: "4 (WAN, MGMT, Workload, Client)" },
+  { label: "VPN Protocol", value: "WireGuard (UDP 51820)" },
+  { label: "IaC Footprint", value: "~750 lines of Terraform" },
+];
+
+const buildSequence: BuildStep[] = [
+  { title: "Design the VNet topology (4 subnets, IP ranges, routing)" },
+  { title: "Write Terraform for networking (VNet, subnets, NSGs, route tables)" },
+  { title: "Deploy OPNsense VM with dual NICs (WAN + LAN)" },
+  { title: "Enable IP forwarding on both NICs" },
+  { title: "Configure OPNsense firewall rules (allow LAN-to-WAN, block inbound)" },
+  { title: "Deploy WireGuard VPN for management access" },
+  { title: "Deploy workload and client VMs, configure UDR routing through OPNsense" },
+  { title: "Verify traffic flows correctly through the NVA" },
+];
 
 const keyLearnings: KeyLearning[] = [
   { source: "Lab 1.1 — OPNsense NVA", lesson: "Azure subnets start at .4 for usable host addresses. Never assume .1 is the appliance — always verify via the portal NIC blade after deployment." },
@@ -106,6 +142,8 @@ export default function Phase1Page() {
           </p>
         </div>
 
+        <ProblemNarrative text={problemNarrative} />
+
         {/* What this phase proves */}
         <section className="mb-20">
           <h2 className="text-2xl font-bold tracking-tight mb-5" style={{ color: "var(--text)" }}>What This Phase Proves</h2>
@@ -192,6 +230,15 @@ export default function Phase1Page() {
             ))}
           </div>
         </section>
+
+        {/* Build Sequence */}
+        <BuildSequence steps={buildSequence} />
+
+        {/* Key Metrics */}
+        <KeyMetrics metrics={keyMetrics} />
+
+        {/* Challenges & Lessons Learned */}
+        <ChallengesLessons items={lessonsLearned} />
 
         {/* Key Learnings */}
         <KeyLearningsRollup items={keyLearnings} />

@@ -1,11 +1,25 @@
 import Link from "next/link";
 
-const phases = [
+type Phase = {
+  number: string;
+  slug: string;
+  title: string;
+  description: string;
+  narrative?: string;
+  nseSkills: string[];
+  status: string;
+  date: string;
+  labs: { slug: string; title: string; status: string }[];
+  hasPage?: boolean;
+};
+
+const phases: Phase[] = [
   {
     number: "01",
     slug: "phase-1-perimeter",
     title: "Perimeter Security & Network Architecture",
     description: "Deploy OPNsense NVA on Azure, segment the network into four isolated subnets, enforce WAN/LAN firewall rules, and establish zero-trust management access via WireGuard VPN — all provisioned with Terraform.",
+    narrative: "Needed a production-grade perimeter firewall on Azure without using Azure Firewall's $1,000/month cost. Deployed OPNsense as a dual-homed NVA with full hub-and-spoke IaC in Terraform, including WireGuard for zero-trust management access. Result: fully functional four-subnet segmented architecture with stateful inspection and VPN for under $20/month.",
     nseSkills: ["Perimeter firewall management", "Network segmentation", "Infrastructure as Code", "Zero-trust access model"],
     status: "Completed",
     date: "May – Jun 2026",
@@ -19,6 +33,7 @@ const phases = [
     slug: "phase-2-visibility",
     title: "Security Visibility & SIEM",
     description: "Build a full-stack log pipeline from OPNsense filterlog to Microsoft Sentinel, deploy Azure VNet Flow Logs for NSG-level traffic visibility, and write KQL queries that parse raw firewall events into actionable threat data.",
+    narrative: "Raw firewall logs sitting on a VM are useless for security investigation — they need to reach a SIEM. Built a syslog-ng to Azure Monitor Agent pipeline that forwards OPNsense filterlog to Microsoft Sentinel, then wrote KQL parsers to extract structured fields from raw CSV-formatted packet logs. Result: queryable, structured firewall telemetry available in Sentinel for threat hunting.",
     nseSkills: ["SIEM deployment", "Log pipeline engineering", "KQL threat hunting", "Network traffic analysis"],
     status: "Completed",
     date: "Jun 2026",
@@ -33,6 +48,7 @@ const phases = [
     slug: "phase-3-detection",
     title: "Threat Detection & IDS/IPS",
     description: "Extend OPNsense with Zenarmor next-gen firewall plugin for DNS-layer domain blocking and Suricata in active IPS mode with Emerging Threats rule sets and custom intrusion detection signatures.",
+    narrative: "A firewall only inspects ports and IPs — it cannot see inside packets for attack signatures. Enabled Suricata on OPNsense in active IPS mode with Emerging Threats Open rules, configured remote syslog forwarding via the local5 facility, and troubleshot a multi-stage pipeline issue where the wrong syslog facility was blocking delivery to Sentinel. Result: real blacklisted IPs (SSH brute force, RDP scanning) being detected and logged with full EVE JSON telemetry.",
     nseSkills: ["IDS/IPS configuration", "Signature management", "Threat intelligence feeds", "Alert tuning"],
     status: "In Progress",
     date: "In Progress",
@@ -43,30 +59,31 @@ const phases = [
   },
   {
     number: "04",
-    slug: "phase-4-hunting",
-    title: "Attack Simulation & Threat Hunting",
-    description: "Run structured attack scenarios mapped to MITRE ATT&CK, build Sentinel Analytics Rules for automated detection, create custom KQL workbooks, and document every detection chain from first packet to fired alert.",
-    nseSkills: ["MITRE ATT&CK framework", "Detection engineering", "Threat hunting", "Sentinel analytics rules"],
+    slug: "phase-4-hybrid",
+    title: "Hybrid Architecture — On-Premises Lab",
+    description: "Mirror the Azure lab on Windows 11 Pro Hyper-V using open-source tooling — OPNsense, Suricata, and Wazuh as a second SIEM — to compare cloud vs on-prem security stacks and eventually correlate both into one Sentinel pane.",
+    nseSkills: ["Hyper-V", "Wazuh SIEM/XDR", "Kali Linux", "Hybrid architecture"],
     status: "Planned",
     date: "Planned",
     labs: [],
+    hasPage: true,
   },
   {
     number: "05",
-    slug: "phase-5-vulnmgmt",
-    title: "Vulnerability Management",
-    description: "Deploy OpenVAS vulnerability scanner against all lab VMs, triage CVEs by severity and exploitability, document remediation steps, and track the complete scan-to-fix lifecycle end to end.",
-    nseSkills: ["Vulnerability assessment", "CVE triage", "Risk prioritization", "Remediation tracking"],
+    slug: "phase-5-dmz",
+    title: "DMZ & Honeypot",
+    description: "Deploy a DMZ subnet with intentionally vulnerable web apps (DVWA, WebGoat) exposed to the internet — observe and document real attacker behavior, attack chains, and TTPs.",
+    nseSkills: ["DMZ", "DVWA", "WebGoat", "WAF", "Honeypot"],
     status: "Planned",
     date: "Planned",
     labs: [],
   },
   {
     number: "06",
-    slug: "phase-6-identity",
-    title: "Identity & Access Control",
-    description: "Stand up Active Directory on Windows Server 2025, enforce Group Policy hardening baselines, integrate with Azure Entra ID, and configure MFA and RBAC for privileged access management across the lab.",
-    nseSkills: ["Active Directory", "Group Policy hardening", "Entra ID / Azure AD", "Privileged access management"],
+    slug: "phase-6-hunting",
+    title: "Attack Simulation & Threat Hunting",
+    description: "Use Kali Linux and Metasploit to simulate full attack chains against the lab, then hunt for the indicators in Sentinel using KQL — mapped to MITRE ATT&CK.",
+    nseSkills: ["Kali Linux", "Metasploit", "MITRE ATT&CK", "KQL", "Threat Hunting"],
     status: "Planned",
     date: "Planned",
     labs: [],
@@ -74,19 +91,39 @@ const phases = [
   {
     number: "07",
     slug: "phase-7-ir",
-    title: "Incident Response",
-    description: "Execute a full IR lifecycle — detect, contain, eradicate, recover — using attacks observed in earlier phases. Write post-incident reports and automate response with Sentinel SOAR Logic Apps playbooks.",
-    nseSkills: ["IR methodology (PICERL)", "SOAR automation", "Forensic timeline analysis", "Post-incident reporting"],
+    title: "Incident Response Automation",
+    description: "Build Sentinel playbooks and Logic Apps that automatically respond to high-confidence alerts — isolate VMs, block IPs, send notifications — reducing MTTD and MTTR.",
+    nseSkills: ["Logic Apps", "Playbooks", "SOAR", "Automation", "Sentinel"],
     status: "Planned",
     date: "Planned",
     labs: [],
   },
   {
     number: "08",
-    slug: "phase-8-compliance",
+    slug: "phase-8-vulnmgmt",
+    title: "Vulnerability Management",
+    description: "Deploy OpenVAS or Tenable for continuous vulnerability scanning, track CVEs across lab VMs, and document remediation workflows.",
+    nseSkills: ["OpenVAS", "CVE", "Vulnerability Scanning", "Remediation"],
+    status: "Planned",
+    date: "Planned",
+    labs: [],
+  },
+  {
+    number: "09",
+    slug: "phase-9-identity",
+    title: "Identity & Zero Trust",
+    description: "Deploy Microsoft Entra ID with Conditional Access, MFA, and Privileged Identity Management — integrate with the lab environment for identity-based threat detection.",
+    nseSkills: ["Entra ID", "MFA", "Conditional Access", "Zero Trust", "PIM"],
+    status: "Planned",
+    date: "Planned",
+    labs: [],
+  },
+  {
+    number: "10",
+    slug: "phase-10-compliance",
     title: "Compliance & Hardening",
-    description: "Apply CIS Benchmark hardening to Windows Server 2025 and Ubuntu VMs, collect audit evidence, map security controls to NIST CSF, and build Sentinel compliance dashboards for reporting.",
-    nseSkills: ["CIS Benchmarks", "NIST CSF mapping", "Security auditing", "Compliance dashboards"],
+    description: "Apply CIS Benchmarks to all lab VMs, document compliance gaps, and map controls to NIST CSF and ISO 27001.",
+    nseSkills: ["CIS Benchmarks", "NIST CSF", "ISO 27001", "Hardening", "GRC"],
     status: "Planned",
     date: "Planned",
     labs: [],
@@ -125,7 +162,7 @@ export default function LabsPage() {
             { label: "Phases Complete", value: "2" },
             { label: "Labs Complete", value: "5" },
             { label: "In Progress", value: "1" },
-            { label: "Planned", value: "5" },
+            { label: "Planned", value: "7" },
           ].map((s) => (
             <div key={s.label} className="text-center">
               <p className="text-2xl font-bold tracking-tight" style={{ color: "var(--text)" }}>{s.value}</p>
@@ -168,6 +205,16 @@ export default function LabsPage() {
                     <p className="text-sm leading-relaxed mb-6 max-w-2xl" style={{ color: "var(--text-2)" }}>
                       {phase.description}
                     </p>
+
+                    {/* Problem narrative */}
+                    {phase.narrative && (
+                      <div
+                        className="rounded-xl px-4 py-3 mb-6 max-w-2xl"
+                        style={{ backgroundColor: "var(--bg-alt)", borderLeft: "3px solid var(--accent)" }}
+                      >
+                        <p className="text-xs leading-relaxed" style={{ color: "var(--text-2)" }}>{phase.narrative}</p>
+                      </div>
+                    )}
 
                     {/* NSE Skills */}
                     <div className="flex flex-wrap gap-1.5 mb-6">
@@ -213,7 +260,7 @@ export default function LabsPage() {
                     )}
 
                     {/* Phase link */}
-                    {phase.status !== "Planned" ? (
+                    {phase.status !== "Planned" || phase.hasPage ? (
                       <Link
                         href={`/labs/${phase.slug}`}
                         className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all"
@@ -229,6 +276,43 @@ export default function LabsPage() {
               </div>
             );
           })}
+        </div>
+
+        {/* Beyond the roadmap */}
+        <div className="mt-20">
+          <div className="text-center mb-10">
+            <p className="text-xs font-semibold tracking-widest uppercase mb-4" style={{ color: "var(--text-3)" }}>
+              Beyond The Roadmap
+            </p>
+            <p className="text-sm max-w-2xl mx-auto leading-relaxed" style={{ color: "var(--text-2)" }}>
+              One more idea under consideration, beyond the ten phases above. Not built yet —
+              listed here for transparency, not as completed work.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-6">
+            <div className="rounded-3xl p-8 md:p-10" style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow)", border: "1px solid var(--border)" }}>
+              <span className="text-xs px-3 py-1 rounded-full font-medium" style={{ backgroundColor: "#30d15820", color: "#30d158" }}>
+                Live
+              </span>
+              <h3 className="text-lg font-bold tracking-tight mt-4 mb-3" style={{ color: "var(--text)" }}>
+                Code Vault Reference Page
+              </h3>
+              <p className="text-sm leading-relaxed max-w-2xl mb-5" style={{ color: "var(--text-2)" }}>
+                A browsable page collecting the real KQL queries, the custom Suricata signature, and the
+                Terraform UDR actually used across completed labs, in one place, so a reviewer doesn&apos;t
+                have to dig through each case study to see the code. Shows only snippets that already
+                exist in a published case study — nothing fabricated for the vault itself.
+              </p>
+              <Link
+                href="/code-vault"
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-medium transition-all"
+                style={{ backgroundColor: "var(--accent)", color: "#fff" }}
+              >
+                View Code Vault →
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </div>

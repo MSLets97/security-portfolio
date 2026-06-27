@@ -5,7 +5,7 @@ import { CodeAndDocs, CodeLink } from "@/components/CodeLinks";
 const codeLinks: CodeLink[] = [
   {
     label: "main.tf — resource 9",
-    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/main.tf#L292-L295",
+    href: "https://github.com/MSLets97/net-sec-hybrid-lab/blob/main/main.tf#L292-L295",
     description: "The azurerm_sentinel_log_analytics_workspace_onboarding resource. The Content Hub parser, attack simulations, and KQL queries on this page are configured directly in Sentinel, not in Terraform.",
   },
 ];

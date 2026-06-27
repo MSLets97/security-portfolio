@@ -1,8 +1,56 @@
 import Link from "next/link";
 import { KeyLearningsRollup, KeyLearning } from "@/components/KeyLearningsRollup";
+import { ProblemNarrative } from "@/components/ProblemNarrative";
+import { ChallengesLessons } from "@/components/ChallengesLessons";
+import { KeyMetrics } from "@/components/KeyMetrics";
+import { MitreCoverage, MitreTechnique } from "@/components/MitreCoverage";
+import { BuildSequence, BuildStep } from "@/components/BuildSequence";
 
 const keyLearnings: KeyLearning[] = [
   { source: "Lab 3.2 — Suricata IDS/IPS", lesson: "OPNsense plugin UIs change between major versions — the Suricata config moved from a per-interface tab with a binary IPS checkbox to a single unified Settings page with a Capture mode dropdown. Never document a workflow purely from memory or an older guide; confirm against the live, running version first." },
+];
+
+const problemNarrative =
+  "A firewall only inspects ports and IPs — it cannot see inside packets for attack signatures. Enabled " +
+  "Suricata on OPNsense in active IPS mode with Emerging Threats Open rules, configured remote syslog " +
+  "forwarding via the local5 facility, and troubleshot a multi-stage pipeline issue where the wrong syslog " +
+  "facility was blocking delivery to Sentinel. Result: real blacklisted IPs (SSH brute force, RDP scanning) " +
+  "being detected and logged with full EVE JSON telemetry.";
+
+const lessonsLearned = [
+  "Suricata uses syslog facility local5 by default in OPNsense, not local4 as documentation suggested — confirmed by reading the Suricata startup log which explicitly states the facility on initialization.",
+  "The OPNsense remote syslog destination must include both the application name (suricata) AND the facility (local5) — adding only one of these is not sufficient for forwarding to work.",
+  "Loading the full Emerging Threats Open ruleset simultaneously caused significant CPU load on a single-core Azure B1ms VM — trimmed to a smaller set of high-confidence rule categories, which reduced load while maintaining detection coverage for the most critical threat categories.",
+  "Suricata in IPS mode (Netmap) does not create /var/run/suricata/ — this directory only exists in Unix socket mode. ps aux and service status are the correct tools to verify the process is running.",
+];
+
+const keyMetrics = [
+  { label: "Ruleset Source", value: "Emerging Threats Open" },
+  { label: "Categories Active", value: "emerging-scan, attack_response, botcc, compromised, drop, exploit, malware" },
+  { label: "Real Attacks Caught", value: "RDP brute force, SSH scanning, C2 TI hits" },
+  { label: "Alert Format", value: "EVE JSON (structured) + fast.log (classic)" },
+  { label: "Suricata Version", value: "8.0.5" },
+];
+
+const mitreTechniques: MitreTechnique[] = [
+  { tactic: "Initial Access", id: "T1190", name: "Exploit Public-Facing Application" },
+  { tactic: "Initial Access", id: "T1133", name: "External Remote Services (RDP/SSH brute force)" },
+  { tactic: "Command and Control", id: "T1071", name: "Application Layer Protocol (C2 beaconing)" },
+  { tactic: "Command and Control", id: "T1071.001", name: "Web Protocols" },
+  { tactic: "Reconnaissance", id: "T1595", name: "Active Scanning (Nmap/port scanning)" },
+  { tactic: "Reconnaissance", id: "T1595.001", name: "Scanning IP Blocks" },
+  { tactic: "Defense Evasion", id: "T1036", name: "Masquerading (traffic on unexpected ports)" },
+];
+
+const buildSequence: BuildStep[] = [
+  { title: "Enable Suricata in OPNsense IDS/IPS Administration panel" },
+  { title: "Set capture mode to Netmap (IPS) on WAN interface" },
+  { title: "Enable syslog alerts and EVE syslog output checkboxes" },
+  { title: "Download and enable Emerging Threats Open rule categories in Downloads tab" },
+  { title: "Verify rules loaded correctly in Rules tab (check count)" },
+  { title: "Update OPNsense remote syslog to add suricata app + local5 facility" },
+  { title: "Add local5 facility to Azure DCR syslog data source" },
+  { title: "Verify Suricata EVE JSON alerts arriving in Sentinel" },
 ];
 
 const labs = [
@@ -67,6 +115,8 @@ export default function Phase3Page() {
             drop network intrusions based on signature matching and custom rules.
           </p>
         </div>
+
+        <ProblemNarrative text={problemNarrative} />
 
         {/* What this phase proves */}
         <section className="mb-20">
@@ -136,6 +186,21 @@ export default function Phase3Page() {
             })}
           </div>
         </section>
+
+        {/* Build Sequence */}
+        <BuildSequence steps={buildSequence} />
+
+        {/* Key Metrics */}
+        <KeyMetrics metrics={keyMetrics} />
+
+        {/* MITRE ATT&CK Coverage */}
+        <MitreCoverage
+          techniques={mitreTechniques}
+          note="Coverage provided by ET Open rulesets — Spamhaus DROP, CINS Active TI, and Emerging Exploit rules."
+        />
+
+        {/* Challenges & Lessons Learned */}
+        <ChallengesLessons items={lessonsLearned} />
 
         {/* Key Learnings */}
         <KeyLearningsRollup items={keyLearnings} />

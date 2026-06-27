@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { GitHubRepoCard } from "@/components/GitHubRepoCard";
+import { ProblemNarrative } from "@/components/ProblemNarrative";
 
 const certs = [
   { name: "SC-200",    full: "Security Operations Analyst Associate", dot: "#2997ff", url: "https://learn.microsoft.com/api/credentials/share/en-us/MatomeSamsonLetsoalo-9758/A4132F9B71111DB?sharingId=7FDEA2F6BD6B2B9" },
@@ -22,6 +24,7 @@ const phases = [
     number: "01",
     title: "Perimeter Security & Network Architecture",
     description: "OPNsense NVA on Azure, four-subnet segmentation, WAN/LAN firewall rules, WireGuard VPN for zero-trust management — full Terraform IaC.",
+    narrative: "Needed a production-grade perimeter firewall on Azure without Azure Firewall's $1,000/month cost. Deployed OPNsense as a dual-homed NVA with full hub-and-spoke IaC in Terraform. Result: a four-subnet segmented architecture with stateful inspection and VPN for under $20/month.",
     tags: ["OPNsense", "Azure", "Terraform", "WireGuard", "UDR"],
     status: "Completed",
     labCount: 2,
@@ -31,6 +34,7 @@ const phases = [
     number: "02",
     title: "Security Visibility & SIEM",
     description: "syslog-ng → AMA → Sentinel pipeline, Azure VNet Flow Logs, KQL threat hunting queries, pfSense parser for structured filterlog analysis.",
+    narrative: "Raw firewall logs sitting on a VM are useless for investigation. Built a syslog-ng to Azure Monitor Agent pipeline forwarding OPNsense filterlog to Sentinel, then wrote KQL parsers for the raw CSV. Result: queryable, structured firewall telemetry for threat hunting.",
     tags: ["Sentinel", "KQL", "syslog-ng", "AMA", "VNet Flow Logs"],
     status: "Completed",
     labCount: 3,
@@ -40,6 +44,7 @@ const phases = [
     number: "03",
     title: "Threat Detection & IDS/IPS",
     description: "Zenarmor NGF plugin for DNS-layer blocking, Suricata in active IPS mode with Emerging Threats rules and custom signatures.",
+    narrative: "A firewall only inspects ports and IPs, not packet contents. Enabled Suricata in active IPS mode with ET Open rules and fixed a syslog facility mismatch blocking delivery to Sentinel. Result: real attacks (SSH brute force, RDP scanning) detected with full EVE JSON telemetry.",
     tags: ["Zenarmor", "Suricata", "IDS/IPS", "Threat Intel"],
     status: "In Progress",
     labCount: 1,
@@ -50,11 +55,13 @@ const checklist = [
   { done: true,  text: "Phase 1 — Perimeter Security & Network Architecture" },
   { done: true,  text: "Phase 2 — Security Visibility & SIEM" },
   { done: false, text: "Phase 3 — Threat Detection & IDS/IPS (in progress)" },
-  { done: false, text: "Phase 4 — Attack Simulation & Threat Hunting" },
-  { done: false, text: "Phase 5 — Vulnerability Management" },
-  { done: false, text: "Phase 6 — Identity & Access Control" },
-  { done: false, text: "Phase 7 — Incident Response" },
-  { done: false, text: "Phase 8 — Compliance & Hardening" },
+  { done: false, text: "Phase 4 — Hybrid Architecture (On-Premises Lab)" },
+  { done: false, text: "Phase 5 — DMZ & Honeypot" },
+  { done: false, text: "Phase 6 — Attack Simulation & Threat Hunting" },
+  { done: false, text: "Phase 7 — Incident Response Automation" },
+  { done: false, text: "Phase 8 — Vulnerability Management" },
+  { done: false, text: "Phase 9 — Identity & Zero Trust" },
+  { done: false, text: "Phase 10 — Compliance & Hardening" },
 ];
 
 export default function Home() {
@@ -77,10 +84,9 @@ export default function Home() {
             className="text-6xl md:text-8xl font-bold tracking-tight leading-[1.05] mb-6"
             style={{ color: "var(--text)" }}
           >
-            Building the{" "}
-            <span style={{ color: "var(--accent)" }}>future</span>
-            <br />
-            of my defence.
+            Azure security labs.<br />
+            Built from scratch.<br />
+            <span style={{ color: "var(--accent)" }}>Documented in full.</span>
           </h1>
 
           <p
@@ -90,11 +96,12 @@ export default function Home() {
             Matome Samson Letsoalo
           </p>
           <p
-            className="text-base max-w-xl mx-auto mb-12 leading-relaxed"
+            className="text-base max-w-2xl mx-auto mb-12 leading-relaxed"
             style={{ color: "var(--text-3)" }}
           >
-            Cloud Security Analyst with 4+ years of experience, transitioning to Network Security Engineer
-            by building every lab from scratch.
+            Cloud Security Analyst building production-grade security infrastructure — OPNsense NVA,
+            Suricata IPS, Microsoft Sentinel, and Terraform IaC — transitioning into a Network Security
+            Engineering role.
           </p>
 
           <div className="flex flex-wrap gap-3 justify-center">
@@ -109,10 +116,13 @@ export default function Home() {
               href="https://linkedin.com/in/mslets97"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 py-3 rounded-full text-sm font-medium transition-all"
-              style={{ backgroundColor: "var(--bg-alt)", color: "var(--text)", border: "1px solid var(--border)" }}
+              className="flex items-center gap-2 px-6 py-3 rounded-full text-sm font-medium transition-all"
+              style={{ backgroundColor: "#0a66c2", color: "#fff" }}
             >
-              LinkedIn ↗
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.34V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.38-1.85 3.6 0 4.27 2.37 4.27 5.46zM5.34 7.43a2.07 2.07 0 1 1 0-4.14 2.07 2.07 0 0 1 0 4.14zM7.12 20.45H3.56V9h3.56z"/>
+              </svg>
+              LinkedIn
             </a>
           </div>
 
@@ -132,6 +142,16 @@ export default function Home() {
                 <p className="text-sm mt-1" style={{ color: "var(--text-3)" }}>{s.l}</p>
               </div>
             ))}
+          </div>
+
+          {/* Featured repo */}
+          <div className="mt-16 w-full">
+            <GitHubRepoCard
+              name="net-sec-hybrid-lab"
+              description="Production-grade Azure security lab — OPNsense NVA, Suricata IDS/IPS, Microsoft Sentinel, and WireGuard VPN, fully deployed via Terraform IaC."
+              tags={["Terraform", "OPNsense", "Suricata", "Sentinel", "Azure", "WireGuard"]}
+              href="https://github.com/MSLets97/net-sec-hybrid-lab"
+            />
           </div>
         </div>
       </section>
@@ -190,10 +210,6 @@ export default function Home() {
               </p>
             </div>
             <div className="flex flex-wrap gap-4 mt-8">
-              <a href="mailto:mslets6040@gmail.com" className="text-sm font-medium" style={{ color: "var(--accent)" }}>
-                mslets6040@gmail.com
-              </a>
-              <span style={{ color: "var(--border-h)" }}>·</span>
               <span className="text-sm" style={{ color: "var(--text-3)" }}>Midrand, Gauteng</span>
             </div>
           </div>
@@ -296,7 +312,10 @@ export default function Home() {
                   <span className="text-xs font-mono" style={{ color: "var(--text-3)" }}>Phase {phase.number}</span>
                 </div>
                 <h3 className="font-semibold text-base mb-2 leading-snug" style={{ color: "var(--text)" }}>{phase.title}</h3>
-                <p className="text-sm leading-relaxed flex-1 mb-5" style={{ color: "var(--text-2)" }}>{phase.description}</p>
+                <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--text-2)" }}>{phase.description}</p>
+                <div className="flex-1">
+                  <ProblemNarrative text={phase.narrative} compact />
+                </div>
                 <div className="flex flex-wrap gap-1.5 mb-5">
                   {phase.tags.map((t) => (
                     <span key={t} className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: "var(--bg-alt)", color: "var(--text-3)", border: "1px solid var(--border)" }}>

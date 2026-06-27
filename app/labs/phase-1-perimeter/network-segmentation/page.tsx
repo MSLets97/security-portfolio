@@ -25,7 +25,7 @@ const lanRules = [
 const codeLinks: CodeLink[] = [
   {
     label: "main.tf — resources 15–19",
-    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/main.tf#L412-L519",
+    href: "https://github.com/MSLets97/net-sec-hybrid-lab/blob/main/main.tf#L412-L519",
     description: "Workload route table, client/workload NICs, and the Windows Server 2025 / Ubuntu 24.04 VMs.",
   },
 ];

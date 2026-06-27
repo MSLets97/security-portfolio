@@ -27,7 +27,7 @@ const architecture: DiagramRow[] = [
 const codeLinks: CodeLink[] = [
   {
     label: "main.tf — resources 20, 22",
-    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/main.tf#L524-L541",
+    href: "https://github.com/MSLets97/net-sec-hybrid-lab/blob/main/main.tf#L524-L541",
     description: "Terraform-managed storage account, plus a code comment documenting why the flow log itself is created via the Portal, not Terraform.",
   },
 ];

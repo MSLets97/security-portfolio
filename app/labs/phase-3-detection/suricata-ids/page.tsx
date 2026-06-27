@@ -10,7 +10,8 @@ const architecture: DiagramRow[] = [
       title: "Suricata 8.0.5 — Netmap (IPS)", color: "security",
       lines: [
         "Scoped to WAN only · promiscuous mode off",
-        "1. Match ET Open (emerging-scan, attack_response)",
+        "1. Match ET Open: scan, attack_response, botcc,",
+        "   compromised, drop, exploit, malware",
         "2. Match custom sig sid:9000001 (SYN flood/5s)",
         "3. drop = packet discarded, never forwarded",
       ],
@@ -25,7 +26,7 @@ const architecture: DiagramRow[] = [
 const codeLinks: CodeLink[] = [
   {
     label: "scripts/configure_ips.py.tpl",
-    href: "https://github.com/MSLets97/azure-opnsense-nva/blob/main/scripts/configure_ips.py.tpl",
+    href: "https://github.com/MSLets97/net-sec-hybrid-lab/blob/main/scripts/configure_ips.py.tpl",
     description: "A companion Terraform/API automation for the general IPS settings (enable, mode, WAN interface, ET Open). This lab's custom Nmap signature and capture-mode tuning were done directly in the OPNsense GUI, as documented above — this script is a separate, repeatable alternative for the baseline settings, not what produced the walkthrough above.",
   },
 ];
@@ -93,10 +94,10 @@ const walkthroughSteps: WalkthroughStep[] = [
     where: "OPNsense GUI → Services → Intrusion Detection → Administration → Rules.",
   },
   {
-    title: "Enable the rule categories relevant to recon detection",
-    what: "Turn on the emerging-scan and emerging-attack_response rule categories specifically.",
-    how: "Filter the rule browser by category, enable the two categories, click Apply.",
-    why: "ET Open ships thousands of rules covering everything from malware C2 to exploit kits — enabling every category would add noise and CPU load for threats outside this lab's scope. Scoping to scan-detection and attack-response categories keeps the ruleset focused on what this lab is actually testing: reconnaissance detection.",
+    title: "Enable the rule categories relevant to this lab's threat scope",
+    what: "Turn on emerging-scan and emerging-attack_response for the recon-detection objective, plus botcc, compromised, drop, exploit, and malware for broader internet-facing threat coverage.",
+    how: "Filter the rule browser by category, enable each, click Apply.",
+    why: "ET Open ships thousands of rules covering everything from malware C2 to exploit kits — enabling every category at once overloaded the single-core Azure B1ms VM running OPNsense. Scoping to these seven categories keeps detection coverage broad (recon, known-bad IPs via Spamhaus DROP and CINS, exploits, malware, C2) without the CPU cost of loading the full ruleset.",
     where: "OPNsense GUI → Services → Intrusion Detection → Administration → Rules.",
   },
   {
@@ -105,6 +106,13 @@ const walkthroughSteps: WalkthroughStep[] = [
     how: `Administration → Rules → User Defined, add:\ndrop tcp any any -> $HOME_NET any (msg:"CUSTOM Nmap SYN Scan Detected - Multiple SYN no ACK"; flags:S; threshold:type threshold, track by_src, count 15, seconds 5; classtype:attempted-recon; sid:9000001; rev:1;)\nSave, Apply, then Update Rules again so the custom signature loads.`,
     why: "ET Open's generic scan rules are a good baseline, but writing one signature by hand demonstrates the actual skill of authoring detection logic, not just consuming someone else's. flags:S matches the SYN-only packets a stealth scan produces (a real handshake completes the connection; a scanner usually doesn't). The threshold clause (15 hits in 5 seconds) exists specifically so a normal user's occasional connection attempt is never mistaken for a scan — only a burst pattern fires it. sid:9000001 is in the 9000000+ range OPNsense reserves for local/custom rules, which avoids ever colliding with an ET Open signature ID.",
     where: "OPNsense GUI → Services → Intrusion Detection → Administration → Rules → User Defined.",
+  },
+  {
+    title: "Point Suricata alerts at Sentinel via the local5 facility",
+    what: "Add a second OPNsense remote syslog destination carrying the suricata application name on facility local5, separate from the existing local0 firewall filterlog destination, and add local5 to the Azure DCR's syslog data source.",
+    how: "System → Settings → Logging / targets → Add a destination scoped to the suricata app + local5 facility; then add local5 to facility_names in the Terraform DCR resource.",
+    why: "Suricata logs to local5 by default on OPNsense, not local4 as an earlier internal doc draft assumed — confirmed by reading Suricata's own startup log, which states the facility explicitly on initialization. Both the app name and the facility have to be set on the syslog destination; setting only one silently drops every Suricata alert before it leaves OPNsense.",
+    where: "OPNsense GUI → System → Settings → Logging / targets + Terraform main.tf (DCR resource).",
   },
   {
     title: "Test with a real Nmap SYN scan and confirm the block",
@@ -123,6 +131,14 @@ const challenges = [
     rootCause: "OPNsense 25.x/26.x consolidated Suricata configuration into a single unified Administration → Settings page, with a Capture mode dropdown (PCAP live mode / Netmap / Divert) replacing the old binary IPS checkbox, plus a multi-select Interfaces field instead of per-interface entries.",
     fix: "Re-verified the actual settings page against a live screenshot of the running OPNsense 26.1.9 instance before writing any further configuration steps, and corrected the guide to document the real unified-page workflow.",
     lesson: "OPNsense plugin UIs change between major versions. Never document a configuration workflow purely from memory or an older guide — confirm against the live, running version of the actual tool before publishing steps.",
+  },
+  {
+    number: "02",
+    title: "Suricata Alerts Never Reached Sentinel — Wrong Syslog Facility",
+    problem: "EVE JSON alerts were confirmed firing locally in OPNsense's own alert log, but nothing from Suricata ever appeared in the Sentinel Syslog table, even though the existing OPNsense filterlog → Sentinel pipeline from Phase 2 was working fine for firewall events.",
+    rootCause: "Suricata logs to syslog facility local5 on OPNsense by default — not local4, which an earlier internal draft of the lab notes assumed. The remote syslog destination also only had the facility set, not the suricata application name, so even after the facility was corrected the destination still wasn't selective enough to confirm which alerts were Suricata's.",
+    fix: "Read Suricata's own startup log, which states the facility explicitly on initialization, confirming local5. Added a syslog destination scoped to both the suricata app name and facility local5, and added local5 to the Terraform DCR's facility_names so Sentinel's data collection rule would actually accept it.",
+    lesson: "A syslog facility mismatch fails completely silently — no error on either end. When one log source on a shared pipeline works (filterlog) and another doesn't (Suricata), check facility and app-name scoping on the syslog destination before assuming the whole pipeline is broken.",
   },
 ];
 
